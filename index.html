@@ -1,0 +1,945 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Deep Work Timer</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;700;800&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#ffffff;
+    --text:#191919;
+    --text-secondary:#6b6b6b;
+    --muted:#9b9a97;
+    --border:#ececea;
+    --border-strong:#e3e3e1;
+    --hover:#f7f7f5;
+    --chip-bg:#f2f1ee;
+    --chip-bg-hover:#eceae6;
+
+    --btn-primary-bg:#191919;
+    --btn-primary-text:#ffffff;
+    --btn-primary-hover:#000000;
+    --btn-ghost-bg:#f7f7f5;
+    --btn-ghost-hover:#efefee;
+    --btn-ghost-text:#191919;
+
+    --green-text:#448361; --green-bg:#dbeddb;
+    --blue-text:#337ea9;  --blue-bg:#d3e5ef;
+    --purple-text:#9065b0;--purple-bg:#e8deee;
+    --yellow-text:#cb912f;--yellow-bg:#fdecc8;
+    --red-text:#d44c47;   --red-bg:#ffe2dd; --red-bg-hover:#ffd5cd;
+    --gray-text:#787774;  --gray-bg:#ebeced;
+
+    --page-bg: rgba(255,255,255,0.86);
+    --page-shadow: 0 24px 70px rgba(0,0,0,.22), 0 2px 10px rgba(0,0,0,.06);
+  }
+  @media (prefers-color-scheme: dark){
+    :root{
+      --bg:#191919;
+      --text:#e9e9e7;
+      --text-secondary:#a8a8a6;
+      --muted:#8f8f8d;
+      --border:#2c2c2c;
+      --border-strong:#373737;
+      --hover:#242424;
+      --chip-bg:#2a2a2a;
+      --chip-bg-hover:#333331;
+
+      --btn-primary-bg:#e9e9e7;
+      --btn-primary-text:#191919;
+      --btn-primary-hover:#ffffff;
+      --btn-ghost-bg:#2a2a2a;
+      --btn-ghost-hover:#333331;
+      --btn-ghost-text:#e9e9e7;
+
+      --green-text:#6bbf8e; --green-bg:#1d3b2c;
+      --blue-text:#6ab3d9;  --blue-bg:#1f3a4a;
+      --purple-text:#c19be0;--purple-bg:#3a2d47;
+      --yellow-text:#e0b25c;--yellow-bg:#4a3a1f;
+      --red-text:#e5897f;   --red-bg:#4a2620; --red-bg-hover:#5a2e27;
+      --gray-text:#b0b0ae;  --gray-bg:#333331;
+
+      --page-bg: rgba(20,20,20,0.80);
+      --page-shadow: 0 24px 70px rgba(0,0,0,.55), 0 2px 10px rgba(0,0,0,.3);
+    }
+  }
+  *{ box-sizing:border-box; }
+  body{
+    margin:0;
+    min-height:100vh;
+    background: var(--bg) url("qingbao-meng-01_igFr7hd4-unsplash.jpg") center center / cover no-repeat fixed;
+    color:var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    padding:40px 20px;
+  }
+  .page{
+    max-width:720px;
+    margin:0 auto;
+    padding:64px 40px 88px;
+    background: var(--page-bg);
+    backdrop-filter: blur(18px) saturate(160%);
+    -webkit-backdrop-filter: blur(18px) saturate(160%);
+    border-radius:18px;
+    box-shadow: var(--page-shadow);
+  }
+  /* tab bar */
+  .tabbar{
+    display:flex;
+    justify-content:center;
+    gap:26px;
+    border-bottom:1px solid var(--border);
+    margin-bottom:28px;
+  }
+  .tab{
+    background:none;
+    border:none;
+    font-size:14.5px;
+    font-weight:500;
+    color:var(--muted);
+    padding:0 0 12px;
+    cursor:pointer;
+    border-bottom:2px solid transparent;
+    margin-bottom:-1px;
+  }
+  .tab.active{
+    color:var(--text);
+    font-weight:600;
+    border-bottom-color:var(--text);
+  }
+
+  /* section headers */
+  .section-title{
+    display:flex;
+    align-items:center;
+    gap:8px;
+    font-size:22px;
+    font-weight:700;
+    color:var(--text);
+    margin:0 0 16px;
+  }
+  .section-title .tri{ color:var(--muted); font-size:13px; }
+  .section-header-row{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    margin:44px 0 16px;
+  }
+  .count-badge{
+    color:var(--muted);
+    font-weight:500;
+    font-size:15px;
+    margin-left:2px;
+  }
+
+  /* timer panel */
+  .panel{
+    border:1px solid var(--border);
+    border-radius:8px;
+  }
+  .activity-row{
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    gap:10px;
+    padding:14px 18px;
+    border-bottom:1px solid var(--border);
+  }
+  .activity-label{
+    display:flex;
+    align-items:center;
+    gap:6px;
+    color:var(--muted);
+    font-size:13px;
+    font-weight:500;
+    flex-shrink:0;
+  }
+  .activity-input{
+    flex:0 1 auto;
+    width:220px;
+    max-width:60%;
+    border:none;
+    border-bottom:1px solid transparent;
+    background:transparent;
+    color:var(--text);
+    font-size:14px;
+    font-weight:500;
+    padding:4px 2px;
+    font-family:inherit;
+    text-align:center;
+  }
+  .activity-input::placeholder{ color:var(--muted); font-weight:400; }
+  .activity-input:focus{ outline:none; border-bottom-color:var(--border-strong); }
+
+  .countdown-config{
+    display:none;
+    align-items:center;
+    justify-content:center;
+    gap:8px;
+    flex-wrap:wrap;
+    padding:14px 18px;
+    border-bottom:1px solid var(--border);
+  }
+  .countdown-config.visible{ display:flex; }
+  .preset-btn{
+    border:1px solid var(--border-strong);
+    background:var(--chip-bg);
+    color:var(--text);
+    padding:5px 12px;
+    border-radius:5px;
+    font-size:13px;
+    font-weight:500;
+    cursor:pointer;
+  }
+  .preset-btn:hover{ background:var(--chip-bg-hover); }
+  .preset-btn.selected{
+    background:var(--btn-primary-bg);
+    border-color:var(--btn-primary-bg);
+    color:var(--btn-primary-text);
+  }
+  .timer-row{
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+    padding:44px 18px 22px;
+    border-bottom:1px solid var(--border);
+  }
+  .timer-display{
+    font-variant-numeric: tabular-nums;
+    font-size:64px;
+    font-weight:400;
+    letter-spacing:-1px;
+    font-family:"Manrope",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+    color:var(--text);
+    margin-bottom:6px;
+    border-radius:8px;
+    padding:2px 10px;
+  }
+  .timer-display.editable{ cursor:text; }
+  .timer-display.editable:hover{
+    background:var(--hover);
+  }
+  .timer-display[contenteditable="true"]{
+    outline:none;
+    background:var(--hover);
+    box-shadow: inset 0 0 0 1px var(--border-strong);
+  }
+  .edit-hint{
+    font-size:11.5px;
+    color:var(--muted);
+    margin-bottom:14px;
+    visibility:hidden;
+    min-height:14px;
+  }
+  .edit-hint.visible{ visibility:visible; }
+  .status-pill{
+    display:inline-flex;
+    align-items:center;
+    gap:6px;
+    font-size:12.5px;
+    font-weight:600;
+    padding:4px 10px;
+    border-radius:5px;
+    background:var(--gray-bg);
+    color:var(--gray-text);
+  }
+  .status-pill::before{
+    content:"";
+    width:6px; height:6px;
+    border-radius:50%;
+    background:currentColor;
+  }
+  .status-ready{ background:var(--gray-bg); color:var(--gray-text); }
+  .status-running{ background:var(--blue-bg); color:var(--blue-text); }
+  .status-running-countdown{ background:var(--purple-bg); color:var(--purple-text); }
+  .status-paused{ background:var(--yellow-bg); color:var(--yellow-text); }
+  .status-done{ background:var(--green-bg); color:var(--green-text); }
+
+  .controls{
+    display:flex;
+    justify-content:center;
+    gap:10px;
+    padding:16px 18px;
+  }
+  .controls button{
+    flex:0 0 auto;
+    min-width:104px;
+    padding:10px 20px;
+    border-radius:6px;
+    border:1px solid transparent;
+    font-size:13.5px;
+    font-weight:600;
+    cursor:pointer;
+  }
+  .controls button:disabled{ opacity:.4; cursor:default; }
+  .btn-start{ background:var(--btn-primary-bg); color:var(--btn-primary-text); }
+  .btn-start:hover:not(:disabled){ background:var(--btn-primary-hover); }
+  .btn-stop{ background:var(--red-bg); color:var(--red-text); }
+  .btn-stop:hover:not(:disabled){ background:var(--red-bg-hover); }
+  .btn-reset{ background:var(--btn-ghost-bg); color:var(--btn-ghost-text); border-color:var(--border-strong); }
+  .btn-reset:hover:not(:disabled){ background:var(--btn-ghost-hover); }
+
+  .ghost-btn{
+    display:inline-flex;
+    align-items:center;
+    gap:6px;
+    background:var(--btn-ghost-bg);
+    border:1px solid var(--border-strong);
+    color:var(--btn-ghost-text);
+    padding:6px 12px;
+    border-radius:6px;
+    font-size:13px;
+    font-weight:600;
+    cursor:pointer;
+  }
+  .ghost-btn:hover{ background:var(--btn-ghost-hover); }
+
+  .stats-panel{ display:none; }
+  .stats-panel.visible{ display:block; }
+
+  /* tables */
+  table.notion-table{
+    width:100%;
+    border-collapse:collapse;
+    margin-bottom:10px;
+  }
+  table.notion-table th{
+    text-align:left;
+    font-size:12.5px;
+    font-weight:500;
+    color:var(--muted);
+    padding:8px 10px;
+    border-bottom:1px solid var(--border);
+    white-space:nowrap;
+  }
+  table.notion-table td{
+    padding:10px 10px;
+    font-size:13.5px;
+    border-bottom:1px solid var(--border);
+    color:var(--text);
+  }
+  table.notion-table tbody tr:hover{ background:var(--hover); }
+  table.notion-table td.num, table.notion-table th.num{ text-align:right; }
+  .mono{ font-family:"Manrope",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; font-weight:700; }
+  .tag-pill{
+    display:inline-flex;
+    align-items:center;
+    padding:2px 9px;
+    border-radius:5px;
+    font-size:12.5px;
+    font-weight:600;
+  }
+  .tag-blue{ background:var(--blue-bg); color:var(--blue-text); }
+  .tag-purple{ background:var(--purple-bg); color:var(--purple-text); }
+  .empty-row td{ color:var(--muted); font-style:normal; }
+
+  .caption-row{
+    display:flex;
+    align-items:center;
+    gap:8px;
+    padding:2px 10px 26px;
+    font-size:12px;
+    font-weight:600;
+    letter-spacing:.04em;
+    color:var(--muted);
+    text-transform:uppercase;
+  }
+  .caption-row .caption-value{
+    color:var(--text);
+    font-size:16px;
+    text-transform:none;
+    letter-spacing:0;
+    font-family:"Manrope",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+  }
+
+  h3.subsection-title{
+    display:flex;
+    align-items:center;
+    gap:7px;
+    font-size:16px;
+    font-weight:700;
+    color:var(--text);
+    margin:30px 0 14px;
+  }
+  h3.subsection-title .tri{ color:var(--muted); font-size:12px; }
+
+  .today-row{ background: var(--hover); }
+  .day-row{ cursor:pointer; }
+  .day-row:hover{ background:var(--hover); }
+  .chevron{
+    display:inline-block;
+    width:14px;
+    color:var(--muted);
+    font-size:10px;
+  }
+  .day-detail-row td{
+    padding:0;
+    background:var(--hover);
+  }
+  table.notion-table.nested{
+    width:100%;
+    border-collapse:collapse;
+    margin:0;
+  }
+  table.notion-table.nested th{
+    padding:6px 10px 6px 32px;
+    font-size:11.5px;
+  }
+  table.notion-table.nested td{
+    padding:8px 10px 8px 32px;
+    font-size:12.5px;
+  }
+  table.notion-table.nested tr:last-child td{ border-bottom:none; }
+</style>
+</head>
+<body>
+
+<div class="page">
+  <div class="tabbar">
+    <button id="tabStopwatch" class="tab">⏱ Stopwatch</button>
+    <button id="tabCountdown" class="tab active">⏲ Countdown</button>
+  </div>
+
+  <div class="panel">
+    <div class="activity-row">
+      <label for="activityInput" class="activity-label">🏷️ Activity</label>
+      <input id="activityInput" class="activity-input" type="text" placeholder="What are you working on?" autocomplete="off">
+    </div>
+    <div id="countdownConfig" class="countdown-config visible">
+      <button class="preset-btn" data-sec="1500">25m</button>
+      <button class="preset-btn" data-sec="3000">50m</button>
+      <button class="preset-btn selected" data-sec="3600">60m</button>
+      <button class="preset-btn" data-sec="5400">90m</button>
+    </div>
+
+    <div class="timer-row">
+      <div id="timerDisplay" class="timer-display">00:00</div>
+      <div id="editHint" class="edit-hint">click the clock to set a duration — try "45" or "45:30"</div>
+      <span id="statusLine" class="status-pill status-ready">Ready</span>
+    </div>
+
+    <div class="controls">
+      <button id="btnStart" class="btn-start">Start</button>
+      <button id="btnStop" class="btn-stop" disabled>Stop &amp; Log</button>
+      <button id="btnReset" class="btn-reset" disabled>Reset</button>
+    </div>
+  </div>
+
+  <div class="section-header-row">
+    <h2 class="section-title" style="margin:0;"><span class="tri">▾</span> 📊 Totals <span id="totalsCountBadge" class="count-badge"></span></h2>
+    <button id="statsToggle" class="ghost-btn">👁️ Show</button>
+  </div>
+
+  <div id="statsPanel" class="stats-panel">
+    <table class="notion-table">
+      <thead>
+        <tr>
+          <th>🏷 Activity</th>
+          <th>Mode</th>
+          <th>🕓 Logged at</th>
+          <th class="num">⏳ Duration</th>
+        </tr>
+      </thead>
+      <tbody id="sessionList"></tbody>
+    </table>
+    <div class="caption-row">
+      <span>TODAY'S TOTAL</span>
+      <span id="todayTotalValue" class="caption-value">0:00:00</span>
+    </div>
+
+    <h3 class="subsection-title"><span class="tri">▾</span> 📅 History</h3>
+    <table class="notion-table">
+      <thead>
+        <tr>
+          <th>Date</th>
+          <th class="num">Total</th>
+        </tr>
+      </thead>
+      <tbody id="historyList"></tbody>
+    </table>
+    <div class="caption-row">
+      <span>ALL-TIME TOTAL</span>
+      <span id="allTimeTotalValue" class="caption-value">0:00:00</span>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  const STORAGE_KEY = "deepWorkTimer.days.v1";
+  const PREF_KEY = "deepWorkTimer.statsVisible.v1";
+  const ACTIVITY_KEY = "deepWorkTimer.lastActivity.v1";
+
+  function escapeHtml(str){
+    return String(str).replace(/[&<>"']/g, c => ({
+      "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;"
+    }[c]));
+  }
+
+  // ---------- date / storage helpers ----------
+  function todayKey(d = new Date()){
+    const y = d.getFullYear();
+    const m = String(d.getMonth()+1).padStart(2,"0");
+    const day = String(d.getDate()).padStart(2,"0");
+    return `${y}-${m}-${day}`;
+  }
+
+  function loadAll(){
+    try{
+      return JSON.parse(localStorage.getItem(STORAGE_KEY)) || {};
+    }catch(e){ return {}; }
+  }
+
+  function saveAll(data){
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+  }
+
+  function addSession(durationSeconds, mode, activity){
+    if(durationSeconds <= 0) return;
+    const data = loadAll();
+    const key = todayKey();
+    if(!data[key]) data[key] = { totalSeconds: 0, sessions: [] };
+    data[key].totalSeconds += durationSeconds;
+    data[key].sessions.push({
+      end: new Date().toISOString(),
+      durationSeconds,
+      mode,
+      activity: activity || "Untitled"
+    });
+    saveAll(data);
+  }
+
+  // ---------- formatting ----------
+  function fmtHMS(totalSeconds){
+    totalSeconds = Math.max(0, Math.round(totalSeconds));
+    const h = Math.floor(totalSeconds/3600);
+    const m = Math.floor((totalSeconds%3600)/60);
+    const s = totalSeconds%60;
+    if(h > 0){
+      return `${h}:${String(m).padStart(2,"0")}:${String(s).padStart(2,"0")}`;
+    }
+    return `${String(m).padStart(2,"0")}:${String(s).padStart(2,"0")}`;
+  }
+
+  function fmtClock(iso){
+    const d = new Date(iso);
+    let h = d.getHours();
+    const m = String(d.getMinutes()).padStart(2,"0");
+    const ampm = h >= 12 ? "PM" : "AM";
+    h = h % 12; if(h===0) h = 12;
+    return `${h}:${m} ${ampm}`;
+  }
+
+  function fmtDateLabel(key){
+    const [y,m,d] = key.split("-").map(Number);
+    const date = new Date(y, m-1, d);
+    return date.toLocaleDateString(undefined, { month:"short", day:"numeric", year:"numeric" });
+  }
+
+  // ---------- state ----------
+  let mode = "countdown"; // or "stopwatch"
+  let countdownSeconds = 3600;
+  let running = false;
+  let startTimestamp = null;   // ms, when current run segment started
+  let accumulatedMs = 0;       // ms accumulated from prior (paused) segments
+  let tickHandle = null;
+  let isEditing = false;
+  const expandedDays = new Set(); // date keys currently expanded in the History table
+
+  // ---------- elements ----------
+  const el = {
+    tabStopwatch: document.getElementById("tabStopwatch"),
+    tabCountdown: document.getElementById("tabCountdown"),
+    countdownConfig: document.getElementById("countdownConfig"),
+    timerDisplay: document.getElementById("timerDisplay"),
+    editHint: document.getElementById("editHint"),
+    statusLine: document.getElementById("statusLine"),
+    btnStart: document.getElementById("btnStart"),
+    btnStop: document.getElementById("btnStop"),
+    btnReset: document.getElementById("btnReset"),
+    statsToggle: document.getElementById("statsToggle"),
+    statsPanel: document.getElementById("statsPanel"),
+    todayTotalValue: document.getElementById("todayTotalValue"),
+    allTimeTotalValue: document.getElementById("allTimeTotalValue"),
+    sessionList: document.getElementById("sessionList"),
+    historyList: document.getElementById("historyList"),
+    totalsCountBadge: document.getElementById("totalsCountBadge"),
+    activityInput: document.getElementById("activityInput"),
+  };
+
+  // remember the last-typed activity between visits
+  el.activityInput.value = localStorage.getItem(ACTIVITY_KEY) || "";
+  el.activityInput.addEventListener("input", () => {
+    localStorage.setItem(ACTIVITY_KEY, el.activityInput.value);
+  });
+
+  function setStatus(text, cls){
+    el.statusLine.textContent = text;
+    el.statusLine.className = "status-pill " + cls;
+  }
+
+  // ---------- mode tabs ----------
+  function setMode(newMode){
+    if(running) return; // don't allow switching mid-run
+    mode = newMode;
+    el.tabStopwatch.classList.toggle("active", mode === "stopwatch");
+    el.tabCountdown.classList.toggle("active", mode === "countdown");
+    el.countdownConfig.classList.toggle("visible", mode === "countdown");
+    resetTimer();
+  }
+  el.tabStopwatch.addEventListener("click", () => setMode("stopwatch"));
+  el.tabCountdown.addEventListener("click", () => setMode("countdown"));
+
+  function syncPresetSelection(){
+    document.querySelectorAll(".preset-btn").forEach(b => {
+      b.classList.toggle("selected", Number(b.dataset.sec) === countdownSeconds);
+    });
+  }
+
+  document.querySelectorAll(".preset-btn").forEach(btn => {
+    btn.addEventListener("click", () => {
+      if(running) return;
+      countdownSeconds = Number(btn.dataset.sec);
+      syncPresetSelection();
+      resetTimer();
+    });
+  });
+
+  // ---------- click-the-clock editing (countdown mode only) ----------
+  function parseDurationInput(text){
+    text = (text || "").trim();
+    if(!text) return null;
+    if(text.includes(":")){
+      const parts = text.split(":").map(p => p.trim());
+      if(parts.length < 2 || parts.length > 3) return null;
+      if(parts.some(p => p === "" || isNaN(Number(p)))) return null;
+      const nums = parts.map(Number);
+      let h = 0, m = 0, s = 0;
+      if(nums.length === 3){ [h, m, s] = nums; } else { [m, s] = nums; }
+      if(h < 0 || m < 0 || s < 0) return null;
+      return h*3600 + m*60 + s;
+    }
+    const n = Number(text);
+    if(isNaN(n) || n < 0) return null;
+    return Math.round(n * 60); // bare number = minutes
+  }
+
+  function canEditNow(){
+    return mode === "countdown" && !running && accumulatedMs === 0;
+  }
+
+  function enterEditMode(){
+    if(!canEditNow() || isEditing) return;
+    isEditing = true;
+    el.timerDisplay.setAttribute("contenteditable", "true");
+    el.timerDisplay.focus();
+    const range = document.createRange();
+    range.selectNodeContents(el.timerDisplay);
+    const sel = window.getSelection();
+    sel.removeAllRanges();
+    sel.addRange(range);
+  }
+
+  function commitEdit(){
+    if(!isEditing) return;
+    isEditing = false;
+    el.timerDisplay.removeAttribute("contenteditable");
+    const parsed = parseDurationInput(el.timerDisplay.textContent);
+    if(parsed !== null && parsed > 0){
+      countdownSeconds = Math.min(Math.max(Math.round(parsed), 1), 36000);
+      syncPresetSelection();
+    }
+    render();
+  }
+
+  function cancelEdit(){
+    if(!isEditing) return;
+    isEditing = false;
+    el.timerDisplay.removeAttribute("contenteditable");
+    render();
+  }
+
+  el.timerDisplay.addEventListener("click", enterEditMode);
+  el.timerDisplay.addEventListener("blur", commitEdit);
+  el.timerDisplay.addEventListener("keydown", (e) => {
+    if(e.key === "Enter"){ e.preventDefault(); el.timerDisplay.blur(); }
+    else if(e.key === "Escape"){ e.preventDefault(); cancelEdit(); el.timerDisplay.blur(); }
+  });
+  el.timerDisplay.addEventListener("beforeinput", (e) => {
+    if(e.data && !/[0-9:]/.test(e.data)){ e.preventDefault(); }
+  });
+  el.timerDisplay.addEventListener("paste", (e) => {
+    e.preventDefault();
+    const text = (e.clipboardData || window.clipboardData).getData("text");
+    document.execCommand("insertText", false, text.replace(/[^0-9:]/g, ""));
+  });
+
+  // ---------- timer core ----------
+  function elapsedMs(){
+    if(startTimestamp === null) return accumulatedMs;
+    return accumulatedMs + (Date.now() - startTimestamp);
+  }
+
+  function render(){
+    const editable = canEditNow();
+    el.timerDisplay.classList.toggle("editable", editable);
+    el.editHint.classList.toggle("visible", editable);
+    if(isEditing) return;
+
+    let displaySeconds;
+    if(mode === "countdown"){
+      const targetMs = countdownSeconds * 1000;
+      displaySeconds = (targetMs - elapsedMs()) / 1000;
+      if(displaySeconds <= 0){
+        displaySeconds = 0;
+      }
+    } else {
+      displaySeconds = elapsedMs() / 1000;
+    }
+    el.timerDisplay.textContent = fmtHMS(displaySeconds);
+  }
+
+  function tick(){
+    render();
+    if(mode === "countdown"){
+      const targetMs = countdownSeconds * 1000;
+      if(elapsedMs() >= targetMs){
+        finishCountdown();
+      }
+    }
+  }
+
+  function startTimer(){
+    if(running) return;
+    if(isEditing) commitEdit();
+    if(mode === "countdown" && countdownSeconds <= 0) return;
+    running = true;
+    startTimestamp = Date.now();
+    el.btnStart.textContent = "Pause";
+    el.btnStop.disabled = false;
+    el.btnReset.disabled = true;
+    if(mode === "countdown"){
+      setStatus(`Counting down from ${fmtHMS(countdownSeconds)}…`, "status-running-countdown");
+    } else {
+      setStatus("Timing…", "status-running");
+    }
+    tickHandle = setInterval(tick, 250);
+    render();
+  }
+
+  function pauseTimer(){
+    if(!running) return;
+    accumulatedMs = elapsedMs();
+    startTimestamp = null;
+    running = false;
+    clearInterval(tickHandle);
+    el.btnStart.textContent = "Resume";
+    el.btnReset.disabled = false;
+    setStatus("Paused", "status-paused");
+    render();
+  }
+
+  el.btnStart.addEventListener("click", () => {
+    if(running) pauseTimer();
+    else startTimer();
+  });
+
+  function stopAndLog(){
+    const elapsed = elapsedMs();
+    if(running){
+      accumulatedMs = elapsed;
+      startTimestamp = null;
+      running = false;
+      clearInterval(tickHandle);
+    }
+    const seconds = accumulatedMs / 1000;
+    addSession(seconds, mode, el.activityInput.value.trim());
+    setStatus(`Logged ${fmtHMS(seconds)}`, "status-done");
+    resetInternalOnly();
+    refreshStats();
+  }
+  el.btnStop.addEventListener("click", stopAndLog);
+
+  function finishCountdown(){
+    // Auto-log the full target duration and alert the user.
+    running = false;
+    clearInterval(tickHandle);
+    startTimestamp = null;
+    accumulatedMs = countdownSeconds * 1000;
+    const seconds = accumulatedMs / 1000;
+    addSession(seconds, mode, el.activityInput.value.trim());
+    setStatus(`✅ Chunk complete — logged ${fmtHMS(seconds)}`, "status-done");
+    beep();
+    document.title = "✅ Chunk done! — Deep Work Timer";
+    resetInternalOnly();
+    refreshStats();
+  }
+
+  function resetInternalOnly(){
+    accumulatedMs = 0;
+    startTimestamp = null;
+    el.btnStart.textContent = "Start";
+    el.btnStop.disabled = true;
+    el.btnReset.disabled = true;
+    render();
+  }
+
+  function resetTimer(){
+    if(running){
+      running = false;
+      clearInterval(tickHandle);
+    }
+    accumulatedMs = 0;
+    startTimestamp = null;
+    el.btnStart.textContent = "Start";
+    el.btnStop.disabled = true;
+    el.btnReset.disabled = true;
+    setStatus("Ready", "status-ready");
+    document.title = "Deep Work Timer";
+    render();
+  }
+  el.btnReset.addEventListener("click", resetTimer);
+
+  // simple beep using WebAudio, no external assets
+  function beep(){
+    try{
+      const ctx = new (window.AudioContext || window.webkitAudioContext)();
+      const playTone = (delay) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.connect(gain); gain.connect(ctx.destination);
+        osc.frequency.value = 880;
+        gain.gain.setValueAtTime(0.001, ctx.currentTime + delay);
+        gain.gain.exponentialRampToValueAtTime(0.2, ctx.currentTime + delay + 0.02);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + delay + 0.3);
+        osc.start(ctx.currentTime + delay);
+        osc.stop(ctx.currentTime + delay + 0.32);
+      };
+      playTone(0); playTone(0.35); playTone(0.7);
+    }catch(e){ /* audio not available, ignore */ }
+  }
+
+  // ---------- stats panel ----------
+  function statsVisible(){
+    return localStorage.getItem(PREF_KEY) === "1";
+  }
+  function setStatsVisible(v){
+    localStorage.setItem(PREF_KEY, v ? "1" : "0");
+    el.statsPanel.classList.toggle("visible", v);
+    el.statsToggle.textContent = v ? "🙈 Hide" : "👁️ Show";
+  }
+  el.statsToggle.addEventListener("click", () => setStatsVisible(!statsVisible()));
+
+  function refreshStats(){
+    const data = loadAll();
+    const key = todayKey();
+    const today = data[key] || { totalSeconds: 0, sessions: [] };
+
+    el.todayTotalValue.textContent = fmtHMS(today.totalSeconds);
+    el.totalsCountBadge.textContent = today.sessions.length
+      ? `${today.sessions.length} today`
+      : "";
+
+    el.sessionList.innerHTML = "";
+    if(today.sessions.length === 0){
+      const tr = document.createElement("tr");
+      tr.className = "empty-row";
+      tr.innerHTML = `<td colspan="4">No sessions logged yet today.</td>`;
+      el.sessionList.appendChild(tr);
+    } else {
+      [...today.sessions].reverse().forEach(s => {
+        const tr = document.createElement("tr");
+        const tagClass = s.mode === "countdown" ? "tag-purple" : "tag-blue";
+        const modeLabel = s.mode === "countdown" ? "⏲ Countdown" : "⏱ Stopwatch";
+        tr.innerHTML = `
+          <td>${escapeHtml(s.activity || "Untitled")}</td>
+          <td><span class="tag-pill ${tagClass}">${modeLabel}</span></td>
+          <td>${fmtClock(s.end)}</td>
+          <td class="num mono">${fmtHMS(s.durationSeconds)}</td>
+        `;
+        el.sessionList.appendChild(tr);
+      });
+    }
+
+    el.historyList.innerHTML = "";
+    const days = Object.keys(data).sort((a,b) => b.localeCompare(a));
+    let allTimeSeconds = 0;
+    if(days.length === 0){
+      const tr = document.createElement("tr");
+      tr.className = "empty-row";
+      tr.innerHTML = `<td colspan="2">No history yet.</td>`;
+      el.historyList.appendChild(tr);
+    } else {
+      days.forEach(k => {
+        allTimeSeconds += data[k].totalSeconds;
+        const isExpanded = expandedDays.has(k);
+
+        const tr = document.createElement("tr");
+        tr.className = "day-row" + (k === key ? " today-row" : "");
+        const label = k === key ? `${fmtDateLabel(k)} · Today` : fmtDateLabel(k);
+        tr.innerHTML = `<td><span class="chevron">${isExpanded ? "▾" : "▸"}</span>${label}</td><td class="num mono">${fmtHMS(data[k].totalSeconds)}</td>`;
+        tr.addEventListener("click", () => {
+          if(expandedDays.has(k)) expandedDays.delete(k);
+          else expandedDays.add(k);
+          refreshStats();
+        });
+        el.historyList.appendChild(tr);
+
+        if(isExpanded){
+          const detailTr = document.createElement("tr");
+          detailTr.className = "day-detail-row";
+          const sessions = data[k].sessions || [];
+          const rowsHtml = sessions.length === 0
+            ? `<tr class="empty-row"><td colspan="4">No sessions recorded.</td></tr>`
+            : [...sessions].reverse().map(s => {
+                const tagClass = s.mode === "countdown" ? "tag-purple" : "tag-blue";
+                const modeLabel = s.mode === "countdown" ? "⏲ Countdown" : "⏱ Stopwatch";
+                return `<tr>
+                  <td>${escapeHtml(s.activity || "Untitled")}</td>
+                  <td><span class="tag-pill ${tagClass}">${modeLabel}</span></td>
+                  <td>${fmtClock(s.end)}</td>
+                  <td class="num mono">${fmtHMS(s.durationSeconds)}</td>
+                </tr>`;
+              }).join("");
+          detailTr.innerHTML = `<td colspan="2">
+            <table class="notion-table nested">
+              <thead><tr><th>Activity</th><th>Mode</th><th>Logged at</th><th class="num">Duration</th></tr></thead>
+              <tbody>${rowsHtml}</tbody>
+            </table>
+          </td>`;
+          el.historyList.appendChild(detailTr);
+        }
+      });
+    }
+    el.allTimeTotalValue.textContent = fmtHMS(allTimeSeconds);
+  }
+
+  // ---------- init ----------
+  setStatsVisible(statsVisible());
+  refreshStats();
+  render();
+
+  // keep stats fresh if user has multiple tabs open
+  window.addEventListener("storage", (e) => {
+    if(e.key === STORAGE_KEY) refreshStats();
+  });
+
+  // warn before closing tab with an unlogged running/paused timer
+  window.addEventListener("beforeunload", (e) => {
+    if(running || accumulatedMs > 0){
+      e.preventDefault();
+      e.returnValue = "";
+    }
+  });
+
+})();
+</script>
+
+</body>
+</html>
