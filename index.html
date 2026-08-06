@@ -439,9 +439,8 @@
       <thead>
         <tr>
           <th>🏷 Activity</th>
-          <th>Mode</th>
-          <th>🕓 Logged at</th>
-          <th class="num">⏳ Duration</th>
+          <th class="num">Chunks</th>
+          <th class="num">⏳ Total</th>
         </tr>
       </thead>
       <tbody id="sessionList"></tbody>
@@ -551,6 +550,19 @@
   let tickHandle = null;
   let isEditing = false;
   const expandedDays = new Set(); // date keys currently expanded in the History table
+  const expandedActivities = new Set(); // activity names currently expanded in today's session table
+
+  function groupByActivity(sessions){
+    const map = new Map();
+    sessions.forEach(s => {
+      const key = (s.activity || "Untitled").trim() || "Untitled";
+      if(!map.has(key)) map.set(key, { activity: key, totalSeconds: 0, entries: [] });
+      const g = map.get(key);
+      g.totalSeconds += s.durationSeconds;
+      g.entries.push(s);
+    });
+    return [...map.values()].sort((a,b) => b.totalSeconds - a.totalSeconds);
+  }
 
   // ---------- elements ----------
   const el = {
@@ -850,20 +862,50 @@
     if(today.sessions.length === 0){
       const tr = document.createElement("tr");
       tr.className = "empty-row";
-      tr.innerHTML = `<td colspan="4">No sessions logged yet today.</td>`;
+      tr.innerHTML = `<td colspan="3">No sessions logged yet today.</td>`;
       el.sessionList.appendChild(tr);
     } else {
-      [...today.sessions].reverse().forEach(s => {
+      const groups = groupByActivity(today.sessions);
+      groups.forEach(g => {
+        const isExpanded = expandedActivities.has(g.activity);
+
         const tr = document.createElement("tr");
-        const tagClass = s.mode === "countdown" ? "tag-purple" : "tag-blue";
-        const modeLabel = s.mode === "countdown" ? "⏲ Countdown" : "⏱ Stopwatch";
+        tr.className = "day-row";
+        const countLabel = g.entries.length === 1 ? "1 chunk" : `${g.entries.length} chunks`;
         tr.innerHTML = `
-          <td>${escapeHtml(s.activity || "Untitled")}</td>
-          <td><span class="tag-pill ${tagClass}">${modeLabel}</span></td>
-          <td>${fmtClock(s.end)}</td>
-          <td class="num mono">${fmtHMS(s.durationSeconds)}</td>
+          <td><span class="chevron">${isExpanded ? "▾" : "▸"}</span>${escapeHtml(g.activity)}</td>
+          <td class="num">${countLabel}</td>
+          <td class="num mono">${fmtHMS(g.totalSeconds)}</td>
         `;
+        tr.addEventListener("click", () => {
+          if(expandedActivities.has(g.activity)) expandedActivities.delete(g.activity);
+          else expandedActivities.add(g.activity);
+          refreshStats();
+        });
         el.sessionList.appendChild(tr);
+
+        if(isExpanded){
+          const detailTr = document.createElement("tr");
+          detailTr.className = "day-detail-row";
+          const rowsHtml = [...g.entries]
+            .sort((a,b) => new Date(b.end) - new Date(a.end))
+            .map(s => {
+              const tagClass = s.mode === "countdown" ? "tag-purple" : "tag-blue";
+              const modeLabel = s.mode === "countdown" ? "⏲ Countdown" : "⏱ Stopwatch";
+              return `<tr>
+                <td><span class="tag-pill ${tagClass}">${modeLabel}</span></td>
+                <td>${fmtClock(s.end)}</td>
+                <td class="num mono">${fmtHMS(s.durationSeconds)}</td>
+              </tr>`;
+            }).join("");
+          detailTr.innerHTML = `<td colspan="3">
+            <table class="notion-table nested">
+              <thead><tr><th>Mode</th><th>Logged at</th><th class="num">Duration</th></tr></thead>
+              <tbody>${rowsHtml}</tbody>
+            </table>
+          </td>`;
+          el.sessionList.appendChild(detailTr);
+        }
       });
     }
 
