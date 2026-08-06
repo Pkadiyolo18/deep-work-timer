@@ -35,6 +35,8 @@
 
     --page-bg: rgba(255,255,255,0.86);
     --page-shadow: 0 24px 70px rgba(0,0,0,.22), 0 2px 10px rgba(0,0,0,.06);
+
+    --heat-1:#c6e6c8; --heat-2:#8fd19e; --heat-3:#4fb06a; --heat-4:#217a3c;
   }
   @media (prefers-color-scheme: dark){
     :root{
@@ -64,6 +66,8 @@
 
       --page-bg: rgba(20,20,20,0.80);
       --page-shadow: 0 24px 70px rgba(0,0,0,.55), 0 2px 10px rgba(0,0,0,.3);
+
+      --heat-1:#123822; --heat-2:#1f5c34; --heat-3:#2f8f4e; --heat-4:#4fc76e;
     }
   }
   *{ box-sizing:border-box; }
@@ -355,6 +359,8 @@
     letter-spacing:0;
     font-family:"Manrope",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
   }
+  .caption-row.break-caption .caption-value{ color:var(--yellow-text); font-size:14px; }
+  .break-cell{ color:var(--yellow-text); }
 
   h3.subsection-title{
     display:flex;
@@ -394,6 +400,132 @@
     font-size:12.5px;
   }
   table.notion-table.nested tr:last-child td{ border-bottom:none; }
+
+  /* stats sub-tabs */
+  .stats-tabbar{
+    display:flex;
+    justify-content:center;
+    gap:26px;
+    border-bottom:1px solid var(--border);
+    margin-bottom:20px;
+  }
+  .stats-view{ display:none; }
+  .stats-view.active{ display:block; }
+
+  .chart-block{ margin-bottom:36px; }
+  .chart-block:last-child{ margin-bottom:0; }
+
+  /* weekly bar chart */
+  .week-chart{
+    display:flex;
+    align-items:flex-end;
+    justify-content:space-between;
+    gap:10px;
+    padding:10px 4px 0;
+  }
+  .week-col{
+    flex:1;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    gap:8px;
+  }
+  .week-bar{
+    width:100%;
+    max-width:28px;
+    height:140px;
+    display:flex;
+    flex-direction:column-reverse;
+    align-items:stretch;
+    background:var(--chip-bg);
+    border-radius:4px;
+    overflow:hidden;
+  }
+  .week-bar-focus{ width:100%; background:var(--blue-text); }
+  .week-bar-break{ width:100%; background:var(--yellow-text); }
+  .week-bar-label{ font-size:11.5px; color:var(--muted); }
+  .week-col-today .week-bar-label{ color:var(--text); font-weight:700; }
+
+  .chart-legend{
+    display:flex;
+    justify-content:center;
+    gap:18px;
+    margin-top:14px;
+    font-size:12px;
+    color:var(--muted);
+  }
+  .legend-item{ display:flex; align-items:center; gap:6px; }
+  .legend-swatch{ display:inline-block; width:10px; height:10px; border-radius:2px; }
+
+  /* year heatmap */
+  .heatmap-wrap{
+    overflow-x:auto;
+    padding-bottom:12px;
+    scrollbar-width:thin;
+    scrollbar-color:var(--border-strong) transparent;
+  }
+  .heatmap-wrap::-webkit-scrollbar{ height:6px; }
+  .heatmap-wrap::-webkit-scrollbar-track{ background:transparent; }
+  .heatmap-wrap::-webkit-scrollbar-thumb{ background:var(--border-strong); border-radius:10px; }
+  .heatmap-wrap::-webkit-scrollbar-thumb:hover{ background:var(--muted); }
+
+  .hm-cell:not(.hm-empty){ cursor:pointer; }
+  .hm-selected{ outline:2px solid var(--text); outline-offset:1px; }
+
+  .heatmap-day-detail{ display:none; margin-top:20px; border-top:1px solid var(--border); padding-top:16px; }
+  .heatmap-day-detail.visible{ display:block; }
+  .heatmap-day-detail-header{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    margin-bottom:10px;
+  }
+  .heatmap-day-detail-header h4{ margin:0; font-size:14px; font-weight:700; color:var(--text); }
+  .heatmap-day-detail-close{
+    background:none;
+    border:none;
+    color:var(--muted);
+    cursor:pointer;
+    font-size:12.5px;
+    font-weight:600;
+    padding:4px 8px;
+    border-radius:5px;
+  }
+  .heatmap-day-detail-close:hover{ background:var(--hover); color:var(--text); }
+  .heatmap-months{
+    display:grid;
+    grid-auto-flow:column;
+    grid-auto-columns:11px;
+    gap:3px;
+    font-size:10px;
+    color:var(--muted);
+    height:14px;
+    margin-bottom:4px;
+    white-space:nowrap;
+  }
+  .heatmap-grid{
+    display:grid;
+    grid-template-rows:repeat(7, 11px);
+    grid-auto-flow:column;
+    grid-auto-columns:11px;
+    gap:3px;
+    width:max-content;
+  }
+  .hm-cell{ width:11px; height:11px; border-radius:2px; background:var(--chip-bg); }
+  .hm-cell.hm-empty{ background:transparent; }
+  .hm-level-1{ background:var(--heat-1); }
+  .hm-level-2{ background:var(--heat-2); }
+  .hm-level-3{ background:var(--heat-3); }
+  .hm-level-4{ background:var(--heat-4); }
+  .heatmap-legend{
+    display:flex;
+    align-items:center;
+    gap:4px;
+    margin-top:12px;
+    font-size:11px;
+    color:var(--muted);
+  }
+  .heatmap-legend .hm-cell{ width:10px; height:10px; }
 </style>
 </head>
 <body>
@@ -435,34 +567,80 @@
   </div>
 
   <div id="statsPanel" class="stats-panel">
-    <table class="notion-table">
-      <thead>
-        <tr>
-          <th>🏷 Activity</th>
-          <th class="num">Chunks</th>
-          <th class="num">⏳ Total</th>
-        </tr>
-      </thead>
-      <tbody id="sessionList"></tbody>
-    </table>
-    <div class="caption-row">
-      <span>TODAY'S TOTAL</span>
-      <span id="todayTotalValue" class="caption-value">0:00:00</span>
+    <div class="stats-tabbar">
+      <button id="statsTabTotals" class="tab active">Totals</button>
+      <button id="statsTabCharts" class="tab">Charts</button>
     </div>
 
-    <h3 class="subsection-title"><span class="tri">▾</span> 📅 History</h3>
-    <table class="notion-table">
-      <thead>
-        <tr>
-          <th>Date</th>
-          <th class="num">Total</th>
-        </tr>
-      </thead>
-      <tbody id="historyList"></tbody>
-    </table>
-    <div class="caption-row">
-      <span>ALL-TIME TOTAL</span>
-      <span id="allTimeTotalValue" class="caption-value">0:00:00</span>
+    <div id="statsTotalsView" class="stats-view active">
+      <table class="notion-table">
+        <thead>
+          <tr>
+            <th>🏷 Activity</th>
+            <th class="num">Chunks</th>
+            <th class="num">⏳ Focus</th>
+            <th class="num">☕ Break</th>
+          </tr>
+        </thead>
+        <tbody id="sessionList"></tbody>
+      </table>
+      <div class="caption-row">
+        <span>TODAY'S FOCUS TIME</span>
+        <span id="todayTotalValue" class="caption-value">0:00:00</span>
+      </div>
+      <div class="caption-row break-caption">
+        <span>TODAY'S BREAK TIME</span>
+        <span id="todayBreakValue" class="caption-value">0:00:00</span>
+      </div>
+
+      <h3 class="subsection-title"><span class="tri">▾</span> 📅 History</h3>
+      <table class="notion-table">
+        <thead>
+          <tr>
+            <th>Date</th>
+            <th class="num">⏳ Focus</th>
+            <th class="num">☕ Break</th>
+          </tr>
+        </thead>
+        <tbody id="historyList"></tbody>
+      </table>
+      <div class="caption-row">
+        <span>ALL-TIME FOCUS TIME</span>
+        <span id="allTimeTotalValue" class="caption-value">0:00:00</span>
+      </div>
+      <div class="caption-row break-caption">
+        <span>ALL-TIME BREAK TIME</span>
+        <span id="allTimeBreakValue" class="caption-value">0:00:00</span>
+      </div>
+    </div>
+
+    <div id="statsChartsView" class="stats-view">
+      <div class="chart-block">
+        <h3 class="subsection-title">📊 Last 7 Days</h3>
+        <div id="weekChart" class="week-chart"></div>
+        <div class="chart-legend">
+          <span class="legend-item"><span class="legend-swatch" style="background:var(--blue-text)"></span>Focus</span>
+          <span class="legend-item"><span class="legend-swatch" style="background:var(--yellow-text)"></span>Break</span>
+        </div>
+      </div>
+
+      <div class="chart-block">
+        <h3 class="subsection-title">🗓 <span id="heatmapYearLabel"></span> Heatmap</h3>
+        <div class="heatmap-wrap">
+          <div id="heatmapMonths" class="heatmap-months"></div>
+          <div id="heatmapGrid" class="heatmap-grid"></div>
+        </div>
+        <div class="heatmap-legend">
+          <span>Less</span>
+          <span class="hm-cell"></span>
+          <span class="hm-cell hm-level-1"></span>
+          <span class="hm-cell hm-level-2"></span>
+          <span class="hm-cell hm-level-3"></span>
+          <span class="hm-cell hm-level-4"></span>
+          <span>More</span>
+        </div>
+        <div id="heatmapDayDetail" class="heatmap-day-detail"></div>
+      </div>
     </div>
   </div>
 </div>
@@ -499,17 +677,21 @@
     localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
   }
 
-  function addSession(durationSeconds, mode, activity){
+  function addSession(durationSeconds, mode, activity, breakSeconds){
     if(durationSeconds <= 0) return;
+    breakSeconds = breakSeconds || 0;
     const data = loadAll();
     const key = todayKey();
-    if(!data[key]) data[key] = { totalSeconds: 0, sessions: [] };
+    if(!data[key]) data[key] = { totalSeconds: 0, breakSeconds: 0, sessions: [] };
+    if(!data[key].breakSeconds) data[key].breakSeconds = 0; // back-compat with days saved before break tracking
     data[key].totalSeconds += durationSeconds;
+    data[key].breakSeconds += breakSeconds;
     data[key].sessions.push({
       end: new Date().toISOString(),
       durationSeconds,
       mode,
-      activity: activity || "Untitled"
+      activity: activity || "Untitled",
+      breakSeconds
     });
     saveAll(data);
   }
@@ -549,16 +731,21 @@
   let accumulatedMs = 0;       // ms accumulated from prior (paused) segments
   let tickHandle = null;
   let isEditing = false;
+  let pauseStartedAt = null;   // ms timestamp when the current pause began, null if not paused
+  let sessionBreakMs = 0;      // break time accumulated so far during the in-progress session
+  let breakTickHandle = null;  // live-updates the status pill while paused
   const expandedDays = new Set(); // date keys currently expanded in the History table
   const expandedActivities = new Set(); // activity names currently expanded in today's session table
+  let selectedHeatmapDate = null; // date key of the heatmap cell currently drilled into
 
   function groupByActivity(sessions){
     const map = new Map();
     sessions.forEach(s => {
       const key = (s.activity || "Untitled").trim() || "Untitled";
-      if(!map.has(key)) map.set(key, { activity: key, totalSeconds: 0, entries: [] });
+      if(!map.has(key)) map.set(key, { activity: key, totalSeconds: 0, breakSeconds: 0, entries: [] });
       const g = map.get(key);
       g.totalSeconds += s.durationSeconds;
+      g.breakSeconds += (s.breakSeconds || 0);
       g.entries.push(s);
     });
     return [...map.values()].sort((a,b) => b.totalSeconds - a.totalSeconds);
@@ -578,12 +765,36 @@
     statsToggle: document.getElementById("statsToggle"),
     statsPanel: document.getElementById("statsPanel"),
     todayTotalValue: document.getElementById("todayTotalValue"),
+    todayBreakValue: document.getElementById("todayBreakValue"),
     allTimeTotalValue: document.getElementById("allTimeTotalValue"),
+    allTimeBreakValue: document.getElementById("allTimeBreakValue"),
     sessionList: document.getElementById("sessionList"),
     historyList: document.getElementById("historyList"),
     totalsCountBadge: document.getElementById("totalsCountBadge"),
     activityInput: document.getElementById("activityInput"),
+    statsTabTotals: document.getElementById("statsTabTotals"),
+    statsTabCharts: document.getElementById("statsTabCharts"),
+    statsTotalsView: document.getElementById("statsTotalsView"),
+    statsChartsView: document.getElementById("statsChartsView"),
+    weekChart: document.getElementById("weekChart"),
+    heatmapGrid: document.getElementById("heatmapGrid"),
+    heatmapMonths: document.getElementById("heatmapMonths"),
+    heatmapYearLabel: document.getElementById("heatmapYearLabel"),
+    heatmapDayDetail: document.getElementById("heatmapDayDetail"),
   };
+
+  el.statsTabTotals.addEventListener("click", () => {
+    el.statsTabTotals.classList.add("active");
+    el.statsTabCharts.classList.remove("active");
+    el.statsTotalsView.classList.add("active");
+    el.statsChartsView.classList.remove("active");
+  });
+  el.statsTabCharts.addEventListener("click", () => {
+    el.statsTabCharts.classList.add("active");
+    el.statsTabTotals.classList.remove("active");
+    el.statsChartsView.classList.add("active");
+    el.statsTotalsView.classList.remove("active");
+  });
 
   // remember the last-typed activity between visits
   el.activityInput.value = localStorage.getItem(ACTIVITY_KEY) || "";
@@ -731,6 +942,11 @@
     if(running) return;
     if(isEditing) commitEdit();
     if(mode === "countdown" && countdownSeconds <= 0) return;
+    if(pauseStartedAt !== null){
+      sessionBreakMs += (Date.now() - pauseStartedAt);
+      pauseStartedAt = null;
+      clearInterval(breakTickHandle);
+    }
     running = true;
     startTimestamp = Date.now();
     el.btnStart.textContent = "Pause";
@@ -745,15 +961,22 @@
     render();
   }
 
+  function updatePauseStatus(){
+    const breakSec = Math.floor((Date.now() - pauseStartedAt) / 1000);
+    setStatus(`⏸ Paused — break ${fmtHMS(breakSec)}`, "status-paused");
+  }
+
   function pauseTimer(){
     if(!running) return;
     accumulatedMs = elapsedMs();
     startTimestamp = null;
     running = false;
     clearInterval(tickHandle);
+    pauseStartedAt = Date.now();
     el.btnStart.textContent = "Resume";
     el.btnReset.disabled = false;
-    setStatus("Paused", "status-paused");
+    updatePauseStatus();
+    breakTickHandle = setInterval(updatePauseStatus, 1000);
     render();
   }
 
@@ -770,8 +993,14 @@
       running = false;
       clearInterval(tickHandle);
     }
+    if(pauseStartedAt !== null){
+      sessionBreakMs += (Date.now() - pauseStartedAt);
+      pauseStartedAt = null;
+      clearInterval(breakTickHandle);
+    }
     const seconds = accumulatedMs / 1000;
-    addSession(seconds, mode, el.activityInput.value.trim());
+    const breakSeconds = Math.round(sessionBreakMs / 1000);
+    addSession(seconds, mode, el.activityInput.value.trim(), breakSeconds);
     setStatus(`Logged ${fmtHMS(seconds)}`, "status-done");
     resetInternalOnly();
     refreshStats();
@@ -785,7 +1014,8 @@
     startTimestamp = null;
     accumulatedMs = countdownSeconds * 1000;
     const seconds = accumulatedMs / 1000;
-    addSession(seconds, mode, el.activityInput.value.trim());
+    const breakSeconds = Math.round(sessionBreakMs / 1000);
+    addSession(seconds, mode, el.activityInput.value.trim(), breakSeconds);
     setStatus(`✅ Chunk complete — logged ${fmtHMS(seconds)}`, "status-done");
     beep();
     document.title = "✅ Chunk done! — Deep Work Timer";
@@ -796,6 +1026,9 @@
   function resetInternalOnly(){
     accumulatedMs = 0;
     startTimestamp = null;
+    sessionBreakMs = 0;
+    pauseStartedAt = null;
+    clearInterval(breakTickHandle);
     el.btnStart.textContent = "Start";
     el.btnStop.disabled = true;
     el.btnReset.disabled = true;
@@ -809,6 +1042,9 @@
     }
     accumulatedMs = 0;
     startTimestamp = null;
+    sessionBreakMs = 0;
+    pauseStartedAt = null;
+    clearInterval(breakTickHandle);
     el.btnStart.textContent = "Start";
     el.btnStop.disabled = true;
     el.btnReset.disabled = true;
@@ -851,9 +1087,10 @@
   function refreshStats(){
     const data = loadAll();
     const key = todayKey();
-    const today = data[key] || { totalSeconds: 0, sessions: [] };
+    const today = data[key] || { totalSeconds: 0, breakSeconds: 0, sessions: [] };
 
     el.todayTotalValue.textContent = fmtHMS(today.totalSeconds);
+    el.todayBreakValue.textContent = fmtHMS(today.breakSeconds || 0);
     el.totalsCountBadge.textContent = today.sessions.length
       ? `${today.sessions.length} today`
       : "";
@@ -862,7 +1099,7 @@
     if(today.sessions.length === 0){
       const tr = document.createElement("tr");
       tr.className = "empty-row";
-      tr.innerHTML = `<td colspan="3">No sessions logged yet today.</td>`;
+      tr.innerHTML = `<td colspan="4">No sessions logged yet today.</td>`;
       el.sessionList.appendChild(tr);
     } else {
       const groups = groupByActivity(today.sessions);
@@ -876,6 +1113,7 @@
           <td><span class="chevron">${isExpanded ? "▾" : "▸"}</span>${escapeHtml(g.activity)}</td>
           <td class="num">${countLabel}</td>
           <td class="num mono">${fmtHMS(g.totalSeconds)}</td>
+          <td class="num mono break-cell">${g.breakSeconds > 0 ? fmtHMS(g.breakSeconds) : "—"}</td>
         `;
         tr.addEventListener("click", () => {
           if(expandedActivities.has(g.activity)) expandedActivities.delete(g.activity);
@@ -896,11 +1134,12 @@
                 <td><span class="tag-pill ${tagClass}">${modeLabel}</span></td>
                 <td>${fmtClock(s.end)}</td>
                 <td class="num mono">${fmtHMS(s.durationSeconds)}</td>
+                <td class="num mono break-cell">${(s.breakSeconds || 0) > 0 ? fmtHMS(s.breakSeconds) : "—"}</td>
               </tr>`;
             }).join("");
-          detailTr.innerHTML = `<td colspan="3">
+          detailTr.innerHTML = `<td colspan="4">
             <table class="notion-table nested">
-              <thead><tr><th>Mode</th><th>Logged at</th><th class="num">Duration</th></tr></thead>
+              <thead><tr><th>Mode</th><th>Logged at</th><th class="num">Duration</th><th class="num">☕ Break</th></tr></thead>
               <tbody>${rowsHtml}</tbody>
             </table>
           </td>`;
@@ -912,20 +1151,26 @@
     el.historyList.innerHTML = "";
     const days = Object.keys(data).sort((a,b) => b.localeCompare(a));
     let allTimeSeconds = 0;
+    let allTimeBreakSeconds = 0;
     if(days.length === 0){
       const tr = document.createElement("tr");
       tr.className = "empty-row";
-      tr.innerHTML = `<td colspan="2">No history yet.</td>`;
+      tr.innerHTML = `<td colspan="3">No history yet.</td>`;
       el.historyList.appendChild(tr);
     } else {
       days.forEach(k => {
         allTimeSeconds += data[k].totalSeconds;
+        allTimeBreakSeconds += (data[k].breakSeconds || 0);
         const isExpanded = expandedDays.has(k);
 
         const tr = document.createElement("tr");
         tr.className = "day-row" + (k === key ? " today-row" : "");
         const label = k === key ? `${fmtDateLabel(k)} · Today` : fmtDateLabel(k);
-        tr.innerHTML = `<td><span class="chevron">${isExpanded ? "▾" : "▸"}</span>${label}</td><td class="num mono">${fmtHMS(data[k].totalSeconds)}</td>`;
+        tr.innerHTML = `
+          <td><span class="chevron">${isExpanded ? "▾" : "▸"}</span>${label}</td>
+          <td class="num mono">${fmtHMS(data[k].totalSeconds)}</td>
+          <td class="num mono break-cell">${(data[k].breakSeconds || 0) > 0 ? fmtHMS(data[k].breakSeconds) : "—"}</td>
+        `;
         tr.addEventListener("click", () => {
           if(expandedDays.has(k)) expandedDays.delete(k);
           else expandedDays.add(k);
@@ -938,7 +1183,7 @@
           detailTr.className = "day-detail-row";
           const sessions = data[k].sessions || [];
           const rowsHtml = sessions.length === 0
-            ? `<tr class="empty-row"><td colspan="4">No sessions recorded.</td></tr>`
+            ? `<tr class="empty-row"><td colspan="5">No sessions recorded.</td></tr>`
             : [...sessions].reverse().map(s => {
                 const tagClass = s.mode === "countdown" ? "tag-purple" : "tag-blue";
                 const modeLabel = s.mode === "countdown" ? "⏲ Countdown" : "⏱ Stopwatch";
@@ -947,11 +1192,12 @@
                   <td><span class="tag-pill ${tagClass}">${modeLabel}</span></td>
                   <td>${fmtClock(s.end)}</td>
                   <td class="num mono">${fmtHMS(s.durationSeconds)}</td>
+                  <td class="num mono break-cell">${(s.breakSeconds || 0) > 0 ? fmtHMS(s.breakSeconds) : "—"}</td>
                 </tr>`;
               }).join("");
-          detailTr.innerHTML = `<td colspan="2">
+          detailTr.innerHTML = `<td colspan="3">
             <table class="notion-table nested">
-              <thead><tr><th>Activity</th><th>Mode</th><th>Logged at</th><th class="num">Duration</th></tr></thead>
+              <thead><tr><th>Activity</th><th>Mode</th><th>Logged at</th><th class="num">Duration</th><th class="num">☕ Break</th></tr></thead>
               <tbody>${rowsHtml}</tbody>
             </table>
           </td>`;
@@ -960,6 +1206,177 @@
       });
     }
     el.allTimeTotalValue.textContent = fmtHMS(allTimeSeconds);
+    el.allTimeBreakValue.textContent = fmtHMS(allTimeBreakSeconds);
+
+    renderWeekChart(data);
+    renderHeatmap(data);
+  }
+
+  // ---------- charts ----------
+  function renderWeekChart(data){
+    const todayD = new Date();
+    const days = [];
+    for(let i = 6; i >= 0; i--){
+      const d = new Date(todayD);
+      d.setDate(d.getDate() - i);
+      days.push(d);
+    }
+
+    const rows = days.map(d => {
+      const k = todayKey(d);
+      const rec = data[k] || { totalSeconds: 0, breakSeconds: 0 };
+      return { d, key: k, focus: rec.totalSeconds || 0, brk: rec.breakSeconds || 0 };
+    });
+    const max = Math.max(1, ...rows.map(r => r.focus + r.brk));
+
+    const barMaxPx = 140;
+    el.weekChart.innerHTML = "";
+    rows.forEach(r => {
+      const isToday = r.key === todayKey();
+      const focusPx = Math.round((r.focus / max) * barMaxPx);
+      const breakPx = Math.round((r.brk / max) * barMaxPx);
+      const col = document.createElement("div");
+      col.className = "week-col" + (isToday ? " week-col-today" : "");
+      col.title = `${r.d.toLocaleDateString(undefined,{weekday:"long", month:"short", day:"numeric"})} — Focus ${fmtHMS(r.focus)}, Break ${fmtHMS(r.brk)}`;
+      col.innerHTML = `
+        <div class="week-bar">
+          <div class="week-bar-focus" style="height:${focusPx}px"></div>
+          <div class="week-bar-break" style="height:${breakPx}px"></div>
+        </div>
+        <div class="week-bar-label">${r.d.toLocaleDateString(undefined,{weekday:"short"})}</div>
+      `;
+      el.weekChart.appendChild(col);
+    });
+  }
+
+  function heatLevel(seconds, max){
+    if(seconds <= 0 || max <= 0) return 0;
+    const ratio = seconds / max;
+    if(ratio > 0.75) return 4;
+    if(ratio > 0.5) return 3;
+    if(ratio > 0.25) return 2;
+    return 1;
+  }
+
+  function renderHeatmap(data){
+    const year = new Date().getFullYear();
+    el.heatmapYearLabel.textContent = year;
+
+    const start = new Date(year, 0, 1);
+    const end = new Date(year, 11, 31);
+    const startPad = start.getDay(); // 0 = Sunday
+
+    const days = [];
+    for(let i = 0; i < startPad; i++) days.push(null);
+    for(let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)){
+      days.push(new Date(d));
+    }
+
+    let max = 0;
+    const secondsByKey = new Map();
+    days.forEach(d => {
+      if(!d) return;
+      const k = todayKey(d);
+      const sec = (data[k] && data[k].totalSeconds) || 0;
+      secondsByKey.set(k, sec);
+      if(sec > max) max = sec;
+    });
+
+    el.heatmapGrid.innerHTML = "";
+    days.forEach(d => {
+      const cell = document.createElement("div");
+      if(!d){
+        cell.className = "hm-cell hm-empty";
+      } else {
+        const k = todayKey(d);
+        const sec = secondsByKey.get(k) || 0;
+        const selected = k === selectedHeatmapDate;
+        cell.className = `hm-cell hm-level-${heatLevel(sec, max)}` + (selected ? " hm-selected" : "");
+        const desc = sec > 0 ? `Focus ${fmtHMS(sec)}` : "No time logged";
+        cell.title = `${d.toLocaleDateString(undefined,{month:"short", day:"numeric", year:"numeric"})} — ${desc}`;
+        cell.addEventListener("click", () => {
+          selectedHeatmapDate = (selectedHeatmapDate === k) ? null : k;
+          renderHeatmap(data);
+        });
+      }
+      el.heatmapGrid.appendChild(cell);
+    });
+
+    el.heatmapMonths.innerHTML = "";
+    let lastMonth = -1;
+    const weekCount = Math.ceil(days.length / 7);
+    for(let w = 0; w < weekCount; w++){
+      let firstDay = null;
+      for(let i = 0; i < 7; i++){
+        const cand = days[w * 7 + i];
+        if(cand){ firstDay = cand; break; }
+      }
+      if(firstDay && firstDay.getMonth() !== lastMonth && firstDay.getDate() <= 7){
+        lastMonth = firstDay.getMonth();
+        const label = document.createElement("div");
+        label.className = "heatmap-month-label";
+        label.style.gridColumn = String(w + 1);
+        label.textContent = firstDay.toLocaleDateString(undefined, { month: "short" });
+        el.heatmapMonths.appendChild(label);
+      }
+    }
+
+    renderHeatmapDayDetail(data);
+  }
+
+  function renderHeatmapDayDetail(data){
+    if(!selectedHeatmapDate){
+      el.heatmapDayDetail.classList.remove("visible");
+      el.heatmapDayDetail.innerHTML = "";
+      return;
+    }
+
+    const k = selectedHeatmapDate;
+    const rec = data[k];
+    const [y, m, d] = k.split("-").map(Number);
+    const dateLabel = new Date(y, m - 1, d).toLocaleDateString(undefined, {
+      weekday: "long", month: "long", day: "numeric", year: "numeric"
+    });
+
+    let bodyHtml;
+    if(!rec || !rec.sessions || rec.sessions.length === 0){
+      bodyHtml = `<div class="empty-note" style="padding:4px 0 2px;color:var(--muted);font-size:13px;">No sessions logged that day.</div>`;
+    } else {
+      const rows = [...rec.sessions].reverse().map(s => {
+        const tagClass = s.mode === "countdown" ? "tag-purple" : "tag-blue";
+        const modeLabel = s.mode === "countdown" ? "⏲ Countdown" : "⏱ Stopwatch";
+        return `<tr>
+          <td>${escapeHtml(s.activity || "Untitled")}</td>
+          <td><span class="tag-pill ${tagClass}">${modeLabel}</span></td>
+          <td>${fmtClock(s.end)}</td>
+          <td class="num mono">${fmtHMS(s.durationSeconds)}</td>
+          <td class="num mono break-cell">${(s.breakSeconds || 0) > 0 ? fmtHMS(s.breakSeconds) : "—"}</td>
+        </tr>`;
+      }).join("");
+      bodyHtml = `
+        <table class="notion-table">
+          <thead><tr><th>Activity</th><th>Mode</th><th>Logged at</th><th class="num">Duration</th><th class="num">☕ Break</th></tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+        <div class="caption-row" style="padding-left:0;padding-right:0;padding-bottom:2px;">
+          <span>DAY TOTAL</span>
+          <span class="caption-value">${fmtHMS(rec.totalSeconds)}</span>
+        </div>
+      `;
+    }
+
+    el.heatmapDayDetail.innerHTML = `
+      <div class="heatmap-day-detail-header">
+        <h4>${dateLabel}</h4>
+        <button id="heatmapDayDetailClose" class="heatmap-day-detail-close" type="button">✕ Close</button>
+      </div>
+      ${bodyHtml}
+    `;
+    el.heatmapDayDetail.classList.add("visible");
+    document.getElementById("heatmapDayDetailClose").addEventListener("click", () => {
+      selectedHeatmapDate = null;
+      renderHeatmap(loadAll());
+    });
   }
 
   // ---------- init ----------
