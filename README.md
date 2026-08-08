@@ -21,3 +21,6 @@ Just open `index.html` in a browser (or visit the hosted link, if this repo has 
 ## Background photo credit
 
 Coastline photo by [Qingbao Meng](https://unsplash.com/@qingbao) via [Unsplash](https://unsplash.com/photos/igFr7hd4).
+
+
+edited 8/6/2026. 
