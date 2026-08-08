@@ -116,27 +116,37 @@
   }
 
   /* section headers */
-  .section-title{
-    display:flex;
-    align-items:center;
-    gap:8px;
-    font-size:22px;
-    font-weight:700;
-    color:var(--text);
-    margin:0 0 16px;
-  }
-  .section-title .tri{ color:var(--muted); font-size:13px; }
   .section-header-row{
     display:flex;
-    align-items:center;
-    justify-content:space-between;
+    justify-content:center;
     margin:44px 0 16px;
   }
+  .totals-toggle{
+    display:inline-flex;
+    align-items:center;
+    gap:8px;
+    background:var(--chip-bg);
+    border:1px solid var(--border-strong);
+    border-radius:20px;
+    cursor:pointer;
+    padding:8px 18px;
+    font-family:"Manrope",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+    font-weight:400;
+    font-size:16px;
+    color:var(--text);
+  }
+  .totals-toggle:hover{ background:var(--chip-bg-hover); }
+  .totals-toggle:active{ transform:scale(.97); }
+  .totals-toggle-arrow{
+    font-size:11px;
+    color:var(--muted);
+    transition:transform .15s ease;
+  }
+  .totals-toggle.expanded .totals-toggle-arrow{ transform:rotate(180deg); }
   .count-badge{
     color:var(--muted);
-    font-weight:500;
-    font-size:15px;
-    margin-left:2px;
+    font-weight:400;
+    font-size:13px;
   }
 
   /* timer panel */
@@ -287,21 +297,6 @@
   .btn-reset{ background:var(--btn-ghost-bg); color:var(--btn-ghost-text); border-color:var(--border-strong); }
   .btn-reset:hover:not(:disabled){ background:var(--btn-ghost-hover); }
 
-  .ghost-btn{
-    display:inline-flex;
-    align-items:center;
-    gap:6px;
-    background:var(--btn-ghost-bg);
-    border:1px solid var(--border-strong);
-    color:var(--btn-ghost-text);
-    padding:6px 12px;
-    border-radius:6px;
-    font-size:13px;
-    font-weight:600;
-    cursor:pointer;
-  }
-  .ghost-btn:hover{ background:var(--btn-ghost-hover); }
-
   .stats-panel{ display:none; }
   .stats-panel.visible{ display:block; }
 
@@ -415,13 +410,33 @@
   .chart-block{ margin-bottom:36px; }
   .chart-block:last-child{ margin-bottom:0; }
 
-  /* weekly bar chart */
+  /* weekly bar chart — bars are scaled to an 8h/day goal, not to each other */
   .week-chart{
+    position:relative;
+    padding:26px 4px 0;
+  }
+  .week-goal-line{
+    position:absolute;
+    left:4px;
+    right:4px;
+    bottom:140px; /* keep in sync with WEEK_GOAL_BAR_PX in JS */
+    border-top:1px dashed var(--border-strong);
+  }
+  .week-goal-label{
+    position:absolute;
+    right:4px;
+    bottom:145px; /* WEEK_GOAL_BAR_PX + 5 */
+    font-size:10px;
+    color:var(--muted);
+    background:var(--page-bg);
+    padding:0 4px;
+  }
+  .week-chart-bars{
     display:flex;
     align-items:flex-end;
     justify-content:space-between;
     gap:10px;
-    padding:10px 4px 0;
+    height:100%;
   }
   .week-col{
     flex:1;
@@ -433,11 +448,9 @@
   .week-bar{
     width:100%;
     max-width:28px;
-    height:140px;
     display:flex;
     flex-direction:column-reverse;
     align-items:stretch;
-    background:var(--chip-bg);
     border-radius:4px;
     overflow:hidden;
   }
@@ -562,8 +575,11 @@
   </div>
 
   <div class="section-header-row">
-    <h2 class="section-title" style="margin:0;"><span class="tri">▾</span> 📊 Totals <span id="totalsCountBadge" class="count-badge"></span></h2>
-    <button id="statsToggle" class="ghost-btn">👁️ Show</button>
+    <button id="statsToggle" class="totals-toggle" type="button">
+      <span>Totals</span>
+      <span id="totalsCountBadge" class="count-badge"></span>
+      <span id="statsToggleArrow" class="totals-toggle-arrow">▾</span>
+    </button>
   </div>
 
   <div id="statsPanel" class="stats-panel">
@@ -617,7 +633,11 @@
     <div id="statsChartsView" class="stats-view">
       <div class="chart-block">
         <h3 class="subsection-title">📊 Last 7 Days</h3>
-        <div id="weekChart" class="week-chart"></div>
+        <div id="weekChart" class="week-chart">
+          <div class="week-goal-line"></div>
+          <div class="week-goal-label">8h goal</div>
+          <div id="weekChartBars" class="week-chart-bars"></div>
+        </div>
         <div class="chart-legend">
           <span class="legend-item"><span class="legend-swatch" style="background:var(--blue-text)"></span>Focus</span>
           <span class="legend-item"><span class="legend-swatch" style="background:var(--yellow-text)"></span>Break</span>
@@ -777,6 +797,7 @@
     statsTotalsView: document.getElementById("statsTotalsView"),
     statsChartsView: document.getElementById("statsChartsView"),
     weekChart: document.getElementById("weekChart"),
+    weekChartBars: document.getElementById("weekChartBars"),
     heatmapGrid: document.getElementById("heatmapGrid"),
     heatmapMonths: document.getElementById("heatmapMonths"),
     heatmapYearLabel: document.getElementById("heatmapYearLabel"),
@@ -1080,7 +1101,7 @@
   function setStatsVisible(v){
     localStorage.setItem(PREF_KEY, v ? "1" : "0");
     el.statsPanel.classList.toggle("visible", v);
-    el.statsToggle.textContent = v ? "🙈 Hide" : "👁️ Show";
+    el.statsToggle.classList.toggle("expanded", v);
   }
   el.statsToggle.addEventListener("click", () => setStatsVisible(!statsVisible()));
 
@@ -1213,6 +1234,10 @@
   }
 
   // ---------- charts ----------
+  const WEEK_GOAL_SECONDS = 8 * 3600;  // the daily focus-time goal this chart is scaled against
+  const WEEK_GOAL_BAR_PX = 140;        // px height representing that goal — keep in sync with the CSS bottom:140px rules
+  const WEEK_PX_PER_SECOND = WEEK_GOAL_BAR_PX / WEEK_GOAL_SECONDS;
+
   function renderWeekChart(data){
     const todayD = new Date();
     const days = [];
@@ -1227,25 +1252,28 @@
       const rec = data[k] || { totalSeconds: 0, breakSeconds: 0 };
       return { d, key: k, focus: rec.totalSeconds || 0, brk: rec.breakSeconds || 0 };
     });
-    const max = Math.max(1, ...rows.map(r => r.focus + r.brk));
 
-    const barMaxPx = 140;
-    el.weekChart.innerHTML = "";
+    // chart grows taller than the goal line on days that beat the 8h goal, instead of capping
+    const tallestPx = Math.max(WEEK_GOAL_BAR_PX, ...rows.map(r => (r.focus + r.brk) * WEEK_PX_PER_SECOND));
+    el.weekChart.style.height = Math.ceil(tallestPx) + 26 + "px"; // + top padding reserved in CSS
+
+    el.weekChartBars.innerHTML = "";
     rows.forEach(r => {
       const isToday = r.key === todayKey();
-      const focusPx = Math.round((r.focus / max) * barMaxPx);
-      const breakPx = Math.round((r.brk / max) * barMaxPx);
+      const focusPx = Math.round(r.focus * WEEK_PX_PER_SECOND);
+      const breakPx = Math.round(r.brk * WEEK_PX_PER_SECOND);
+      const pctOfGoal = Math.round((r.focus / WEEK_GOAL_SECONDS) * 100);
       const col = document.createElement("div");
       col.className = "week-col" + (isToday ? " week-col-today" : "");
-      col.title = `${r.d.toLocaleDateString(undefined,{weekday:"long", month:"short", day:"numeric"})} — Focus ${fmtHMS(r.focus)}, Break ${fmtHMS(r.brk)}`;
+      col.title = `${r.d.toLocaleDateString(undefined,{weekday:"long", month:"short", day:"numeric"})} — Focus ${fmtHMS(r.focus)} (${pctOfGoal}% of 8h goal), Break ${fmtHMS(r.brk)}`;
       col.innerHTML = `
-        <div class="week-bar">
+        <div class="week-bar" style="height:${focusPx + breakPx}px">
           <div class="week-bar-focus" style="height:${focusPx}px"></div>
           <div class="week-bar-break" style="height:${breakPx}px"></div>
         </div>
         <div class="week-bar-label">${r.d.toLocaleDateString(undefined,{weekday:"short"})}</div>
       `;
-      el.weekChart.appendChild(col);
+      el.weekChartBars.appendChild(col);
     });
   }
 
