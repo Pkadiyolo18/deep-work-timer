@@ -83,13 +83,38 @@
   .page{
     max-width:720px;
     margin:0 auto;
-    padding:64px 40px 88px;
+    display:flex;
+    flex-direction:column;
+    gap:24px;
+  }
+  .pane{
+    position:relative;
+    padding:40px;
     background: var(--page-bg);
     backdrop-filter: blur(18px) saturate(160%);
     -webkit-backdrop-filter: blur(18px) saturate(160%);
     border-radius:18px;
     box-shadow: var(--page-shadow);
   }
+  .fullscreen-btn{
+    position:absolute;
+    top:18px;
+    right:18px;
+    width:32px;
+    height:32px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    border-radius:8px;
+    border:1px solid var(--border-strong);
+    background:var(--chip-bg);
+    color:var(--muted);
+    font-size:14px;
+    cursor:pointer;
+  }
+  .fullscreen-btn:hover{ background:var(--chip-bg-hover); color:var(--text); }
+  .fullscreen-btn:active{ transform:scale(.93); }
+  .fullscreen-btn.active{ background:var(--btn-primary-bg); color:var(--btn-primary-text); border-color:var(--btn-primary-bg); }
   /* tab bar */
   .tabbar{
     display:flex;
@@ -119,7 +144,7 @@
   .section-header-row{
     display:flex;
     justify-content:center;
-    margin:44px 0 16px;
+    margin:0 0 16px;
   }
   .totals-toggle{
     display:inline-flex;
@@ -187,6 +212,46 @@
   }
   .activity-input::placeholder{ color:var(--muted); font-weight:400; }
   .activity-input:focus{ outline:none; border-bottom-color:var(--border-strong); }
+
+  .distraction-row{
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    gap:14px;
+    padding:12px 18px;
+    border-bottom:1px solid var(--border);
+  }
+  .distraction-counter{
+    display:flex;
+    align-items:center;
+    gap:10px;
+  }
+  .distraction-btn{
+    width:26px;
+    height:26px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    border-radius:6px;
+    border:1px solid var(--border-strong);
+    background:var(--chip-bg);
+    color:var(--text);
+    font-size:15px;
+    font-weight:700;
+    line-height:1;
+    cursor:pointer;
+  }
+  .distraction-btn:hover{ background:var(--chip-bg-hover); }
+  .distraction-btn:active{ transform:scale(.93); }
+  .distraction-count{
+    min-width:18px;
+    text-align:center;
+    font-family:"Manrope",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+    font-weight:700;
+    font-size:15px;
+    color:var(--text);
+  }
+  .distraction-cell{ color:var(--red-text); }
 
   .countdown-config{
     display:none;
@@ -458,6 +523,16 @@
   .week-bar-break{ width:100%; background:var(--yellow-text); }
   .week-bar-label{ font-size:11.5px; color:var(--muted); }
   .week-col-today .week-bar-label{ color:var(--text); font-weight:700; }
+  .week-distraction-badge{
+    font-size:10.5px;
+    font-weight:700;
+    color:var(--red-text);
+    background:var(--red-bg);
+    border-radius:8px;
+    padding:1px 6px;
+    visibility:hidden;
+  }
+  .week-distraction-badge.visible{ visibility:visible; }
 
   .chart-legend{
     display:flex;
@@ -544,6 +619,8 @@
 <body>
 
 <div class="page">
+<div class="pane">
+  <button id="btnFullscreen" class="fullscreen-btn" type="button" title="Enter fullscreen">⛶</button>
   <div class="tabbar">
     <button id="tabStopwatch" class="tab">⏱ Stopwatch</button>
     <button id="tabCountdown" class="tab active">⏲ Countdown</button>
@@ -553,6 +630,14 @@
     <div class="activity-row">
       <label for="activityInput" class="activity-label">🏷️ Activity</label>
       <input id="activityInput" class="activity-input" type="text" placeholder="What are you working on?" autocomplete="off">
+    </div>
+    <div class="distraction-row">
+      <label class="activity-label">⚡ Distractions</label>
+      <div class="distraction-counter">
+        <button id="btnDistractionMinus" class="distraction-btn" type="button" aria-label="Decrease distraction count">−</button>
+        <span id="distractionCount" class="distraction-count">0</span>
+        <button id="btnDistractionPlus" class="distraction-btn" type="button" aria-label="Increase distraction count">+</button>
+      </div>
     </div>
     <div id="countdownConfig" class="countdown-config visible">
       <button class="preset-btn" data-sec="1500">25m</button>
@@ -573,7 +658,9 @@
       <button id="btnReset" class="btn-reset" disabled>Reset</button>
     </div>
   </div>
+</div>
 
+<div class="pane">
   <div class="section-header-row">
     <button id="statsToggle" class="totals-toggle" type="button">
       <span>Totals</span>
@@ -596,6 +683,7 @@
             <th class="num">Chunks</th>
             <th class="num">⏳ Focus</th>
             <th class="num">☕ Break</th>
+            <th class="num">⚡ Distr.</th>
           </tr>
         </thead>
         <tbody id="sessionList"></tbody>
@@ -608,6 +696,10 @@
         <span>TODAY'S BREAK TIME</span>
         <span id="todayBreakValue" class="caption-value">0:00:00</span>
       </div>
+      <div class="caption-row break-caption">
+        <span>TODAY'S DISTRACTIONS</span>
+        <span id="todayDistractionsValue" class="caption-value">0</span>
+      </div>
 
       <h3 class="subsection-title"><span class="tri">▾</span> 📅 History</h3>
       <table class="notion-table">
@@ -616,6 +708,7 @@
             <th>Date</th>
             <th class="num">⏳ Focus</th>
             <th class="num">☕ Break</th>
+            <th class="num">⚡ Distr.</th>
           </tr>
         </thead>
         <tbody id="historyList"></tbody>
@@ -627,6 +720,10 @@
       <div class="caption-row break-caption">
         <span>ALL-TIME BREAK TIME</span>
         <span id="allTimeBreakValue" class="caption-value">0:00:00</span>
+      </div>
+      <div class="caption-row break-caption">
+        <span>ALL-TIME DISTRACTIONS</span>
+        <span id="allTimeDistractionsValue" class="caption-value">0</span>
       </div>
     </div>
 
@@ -664,12 +761,14 @@
     </div>
   </div>
 </div>
+</div>
 
 <script>
 (function(){
   "use strict";
 
   const STORAGE_KEY = "deepWorkTimer.days.v1";
+  const BACKUP_KEY = "deepWorkTimer.days.v1.backup"; // mirror of the last successful save, as a safety net
   const PREF_KEY = "deepWorkTimer.statsVisible.v1";
   const ACTIVITY_KEY = "deepWorkTimer.lastActivity.v1";
 
@@ -688,30 +787,47 @@
   }
 
   function loadAll(){
-    try{
-      return JSON.parse(localStorage.getItem(STORAGE_KEY)) || {};
-    }catch(e){ return {}; }
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if(raw){
+      try{ return JSON.parse(raw); }
+      catch(e){ /* primary copy is unreadable — fall through and try the backup instead */ }
+    }
+    const backupRaw = localStorage.getItem(BACKUP_KEY);
+    if(backupRaw){
+      try{
+        const recovered = JSON.parse(backupRaw);
+        localStorage.setItem(STORAGE_KEY, backupRaw); // restore the primary copy from backup
+        return recovered;
+      }catch(e){ /* backup is unreadable too — nothing left to recover */ }
+    }
+    return {};
   }
 
   function saveAll(data){
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+    const json = JSON.stringify(data);
+    localStorage.setItem(STORAGE_KEY, json);
+    localStorage.setItem(BACKUP_KEY, json); // mirror every save so one bad read can't erase everything
   }
 
-  function addSession(durationSeconds, mode, activity, breakSeconds){
+  function addSession(durationSeconds, mode, activity, breakSeconds, distractions){
     if(durationSeconds <= 0) return;
     breakSeconds = breakSeconds || 0;
+    distractions = distractions || 0;
     const data = loadAll();
     const key = todayKey();
-    if(!data[key]) data[key] = { totalSeconds: 0, breakSeconds: 0, sessions: [] };
+    if(!data[key]) data[key] = { totalSeconds: 0, breakSeconds: 0, distractions: 0, sessions: [] };
     if(!data[key].breakSeconds) data[key].breakSeconds = 0; // back-compat with days saved before break tracking
+    if(!data[key].distractions) data[key].distractions = 0; // back-compat with days saved before distraction tracking
     data[key].totalSeconds += durationSeconds;
     data[key].breakSeconds += breakSeconds;
+    data[key].distractions += distractions;
     data[key].sessions.push({
       end: new Date().toISOString(),
       durationSeconds,
       mode,
       activity: activity || "Untitled",
-      breakSeconds
+      breakSeconds,
+      distractions
     });
     saveAll(data);
   }
@@ -753,6 +869,7 @@
   let isEditing = false;
   let pauseStartedAt = null;   // ms timestamp when the current pause began, null if not paused
   let sessionBreakMs = 0;      // break time accumulated so far during the in-progress session
+  let sessionDistractions = 0; // distraction count for the in-progress session
   let breakTickHandle = null;  // live-updates the status pill while paused
   let lastTickAt = null;       // wall-clock time of the last tick(), used to detect system sleep
   const SLEEP_GAP_MS = 10000;  // a gap this much bigger than the ~250ms tick interval means the system was likely suspended
@@ -764,10 +881,11 @@
     const map = new Map();
     sessions.forEach(s => {
       const key = (s.activity || "Untitled").trim() || "Untitled";
-      if(!map.has(key)) map.set(key, { activity: key, totalSeconds: 0, breakSeconds: 0, entries: [] });
+      if(!map.has(key)) map.set(key, { activity: key, totalSeconds: 0, breakSeconds: 0, distractions: 0, entries: [] });
       const g = map.get(key);
       g.totalSeconds += s.durationSeconds;
       g.breakSeconds += (s.breakSeconds || 0);
+      g.distractions += (s.distractions || 0);
       g.entries.push(s);
     });
     return [...map.values()].sort((a,b) => b.totalSeconds - a.totalSeconds);
@@ -794,6 +912,12 @@
     historyList: document.getElementById("historyList"),
     totalsCountBadge: document.getElementById("totalsCountBadge"),
     activityInput: document.getElementById("activityInput"),
+    distractionCount: document.getElementById("distractionCount"),
+    btnDistractionPlus: document.getElementById("btnDistractionPlus"),
+    btnDistractionMinus: document.getElementById("btnDistractionMinus"),
+    todayDistractionsValue: document.getElementById("todayDistractionsValue"),
+    allTimeDistractionsValue: document.getElementById("allTimeDistractionsValue"),
+    btnFullscreen: document.getElementById("btnFullscreen"),
     statsTabTotals: document.getElementById("statsTabTotals"),
     statsTabCharts: document.getElementById("statsTabCharts"),
     statsTotalsView: document.getElementById("statsTotalsView"),
@@ -824,6 +948,34 @@
   el.activityInput.addEventListener("input", () => {
     localStorage.setItem(ACTIVITY_KEY, el.activityInput.value);
   });
+
+  // ---------- distraction counter (for the in-progress session) ----------
+  function updateDistractionDisplay(){
+    el.distractionCount.textContent = sessionDistractions;
+  }
+  el.btnDistractionPlus.addEventListener("click", () => {
+    sessionDistractions++;
+    updateDistractionDisplay();
+  });
+  el.btnDistractionMinus.addEventListener("click", () => {
+    if(sessionDistractions > 0) sessionDistractions--;
+    updateDistractionDisplay();
+  });
+
+  // ---------- fullscreen toggle ----------
+  function updateFullscreenButton(){
+    const isFullscreen = !!document.fullscreenElement;
+    el.btnFullscreen.classList.toggle("active", isFullscreen);
+    el.btnFullscreen.title = isFullscreen ? "Exit fullscreen" : "Enter fullscreen";
+  }
+  el.btnFullscreen.addEventListener("click", () => {
+    if(document.fullscreenElement){
+      document.exitFullscreen().catch(() => {});
+    } else {
+      document.documentElement.requestFullscreen().catch(() => {});
+    }
+  });
+  document.addEventListener("fullscreenchange", updateFullscreenButton);
 
   function setStatus(text, cls){
     el.statusLine.textContent = text;
@@ -1050,7 +1202,7 @@
     }
     const seconds = accumulatedMs / 1000;
     const breakSeconds = Math.round(sessionBreakMs / 1000);
-    addSession(seconds, mode, el.activityInput.value.trim(), breakSeconds);
+    addSession(seconds, mode, el.activityInput.value.trim(), breakSeconds, sessionDistractions);
     setStatus(`Logged ${fmtHMS(seconds)}`, "status-done");
     resetInternalOnly();
     refreshStats();
@@ -1065,7 +1217,7 @@
     accumulatedMs = countdownSeconds * 1000;
     const seconds = accumulatedMs / 1000;
     const breakSeconds = Math.round(sessionBreakMs / 1000);
-    addSession(seconds, mode, el.activityInput.value.trim(), breakSeconds);
+    addSession(seconds, mode, el.activityInput.value.trim(), breakSeconds, sessionDistractions);
     setStatus(`✅ Chunk complete — logged ${fmtHMS(seconds)}`, "status-done");
     beep();
     document.title = "✅ Chunk done! — Deep Work Timer";
@@ -1077,12 +1229,14 @@
     accumulatedMs = 0;
     startTimestamp = null;
     sessionBreakMs = 0;
+    sessionDistractions = 0;
     pauseStartedAt = null;
     lastTickAt = null;
     clearInterval(breakTickHandle);
     el.btnStart.textContent = "Start";
     el.btnStop.disabled = true;
     el.btnReset.disabled = true;
+    updateDistractionDisplay();
     render();
   }
 
@@ -1094,6 +1248,7 @@
     accumulatedMs = 0;
     startTimestamp = null;
     sessionBreakMs = 0;
+    sessionDistractions = 0;
     pauseStartedAt = null;
     lastTickAt = null;
     clearInterval(breakTickHandle);
@@ -1102,6 +1257,7 @@
     el.btnReset.disabled = true;
     setStatus("Ready", "status-ready");
     document.title = "Deep Work Timer";
+    updateDistractionDisplay();
     render();
   }
   el.btnReset.addEventListener("click", resetTimer);
@@ -1139,10 +1295,11 @@
   function refreshStats(){
     const data = loadAll();
     const key = todayKey();
-    const today = data[key] || { totalSeconds: 0, breakSeconds: 0, sessions: [] };
+    const today = data[key] || { totalSeconds: 0, breakSeconds: 0, distractions: 0, sessions: [] };
 
     el.todayTotalValue.textContent = fmtHMS(today.totalSeconds);
     el.todayBreakValue.textContent = fmtHMS(today.breakSeconds || 0);
+    el.todayDistractionsValue.textContent = today.distractions || 0;
     el.totalsCountBadge.textContent = today.sessions.length
       ? `${today.sessions.length} today`
       : "";
@@ -1151,7 +1308,7 @@
     if(today.sessions.length === 0){
       const tr = document.createElement("tr");
       tr.className = "empty-row";
-      tr.innerHTML = `<td colspan="4">No sessions logged yet today.</td>`;
+      tr.innerHTML = `<td colspan="5">No sessions logged yet today.</td>`;
       el.sessionList.appendChild(tr);
     } else {
       const groups = groupByActivity(today.sessions);
@@ -1166,6 +1323,7 @@
           <td class="num">${countLabel}</td>
           <td class="num mono">${fmtHMS(g.totalSeconds)}</td>
           <td class="num mono break-cell">${g.breakSeconds > 0 ? fmtHMS(g.breakSeconds) : "—"}</td>
+          <td class="num mono distraction-cell">${g.distractions > 0 ? g.distractions : "—"}</td>
         `;
         tr.addEventListener("click", () => {
           if(expandedActivities.has(g.activity)) expandedActivities.delete(g.activity);
@@ -1187,11 +1345,12 @@
                 <td>${fmtClock(s.end)}</td>
                 <td class="num mono">${fmtHMS(s.durationSeconds)}</td>
                 <td class="num mono break-cell">${(s.breakSeconds || 0) > 0 ? fmtHMS(s.breakSeconds) : "—"}</td>
+                <td class="num mono distraction-cell">${(s.distractions || 0) > 0 ? s.distractions : "—"}</td>
               </tr>`;
             }).join("");
-          detailTr.innerHTML = `<td colspan="4">
+          detailTr.innerHTML = `<td colspan="5">
             <table class="notion-table nested">
-              <thead><tr><th>Mode</th><th>Logged at</th><th class="num">Duration</th><th class="num">☕ Break</th></tr></thead>
+              <thead><tr><th>Mode</th><th>Logged at</th><th class="num">Duration</th><th class="num">☕ Break</th><th class="num">⚡ Distr.</th></tr></thead>
               <tbody>${rowsHtml}</tbody>
             </table>
           </td>`;
@@ -1204,15 +1363,17 @@
     const days = Object.keys(data).sort((a,b) => b.localeCompare(a));
     let allTimeSeconds = 0;
     let allTimeBreakSeconds = 0;
+    let allTimeDistractions = 0;
     if(days.length === 0){
       const tr = document.createElement("tr");
       tr.className = "empty-row";
-      tr.innerHTML = `<td colspan="3">No history yet.</td>`;
+      tr.innerHTML = `<td colspan="4">No history yet.</td>`;
       el.historyList.appendChild(tr);
     } else {
       days.forEach(k => {
         allTimeSeconds += data[k].totalSeconds;
         allTimeBreakSeconds += (data[k].breakSeconds || 0);
+        allTimeDistractions += (data[k].distractions || 0);
         const isExpanded = expandedDays.has(k);
 
         const tr = document.createElement("tr");
@@ -1222,6 +1383,7 @@
           <td><span class="chevron">${isExpanded ? "▾" : "▸"}</span>${label}</td>
           <td class="num mono">${fmtHMS(data[k].totalSeconds)}</td>
           <td class="num mono break-cell">${(data[k].breakSeconds || 0) > 0 ? fmtHMS(data[k].breakSeconds) : "—"}</td>
+          <td class="num mono distraction-cell">${(data[k].distractions || 0) > 0 ? data[k].distractions : "—"}</td>
         `;
         tr.addEventListener("click", () => {
           if(expandedDays.has(k)) expandedDays.delete(k);
@@ -1235,7 +1397,7 @@
           detailTr.className = "day-detail-row";
           const sessions = data[k].sessions || [];
           const rowsHtml = sessions.length === 0
-            ? `<tr class="empty-row"><td colspan="5">No sessions recorded.</td></tr>`
+            ? `<tr class="empty-row"><td colspan="6">No sessions recorded.</td></tr>`
             : [...sessions].reverse().map(s => {
                 const tagClass = s.mode === "countdown" ? "tag-purple" : "tag-blue";
                 const modeLabel = s.mode === "countdown" ? "⏲ Countdown" : "⏱ Stopwatch";
@@ -1245,11 +1407,12 @@
                   <td>${fmtClock(s.end)}</td>
                   <td class="num mono">${fmtHMS(s.durationSeconds)}</td>
                   <td class="num mono break-cell">${(s.breakSeconds || 0) > 0 ? fmtHMS(s.breakSeconds) : "—"}</td>
+                  <td class="num mono distraction-cell">${(s.distractions || 0) > 0 ? s.distractions : "—"}</td>
                 </tr>`;
               }).join("");
-          detailTr.innerHTML = `<td colspan="3">
+          detailTr.innerHTML = `<td colspan="4">
             <table class="notion-table nested">
-              <thead><tr><th>Activity</th><th>Mode</th><th>Logged at</th><th class="num">Duration</th><th class="num">☕ Break</th></tr></thead>
+              <thead><tr><th>Activity</th><th>Mode</th><th>Logged at</th><th class="num">Duration</th><th class="num">☕ Break</th><th class="num">⚡ Distr.</th></tr></thead>
               <tbody>${rowsHtml}</tbody>
             </table>
           </td>`;
@@ -1259,6 +1422,7 @@
     }
     el.allTimeTotalValue.textContent = fmtHMS(allTimeSeconds);
     el.allTimeBreakValue.textContent = fmtHMS(allTimeBreakSeconds);
+    el.allTimeDistractionsValue.textContent = allTimeDistractions;
 
     renderWeekChart(data);
     renderHeatmap(data);
@@ -1280,8 +1444,8 @@
 
     const rows = days.map(d => {
       const k = todayKey(d);
-      const rec = data[k] || { totalSeconds: 0, breakSeconds: 0 };
-      return { d, key: k, focus: rec.totalSeconds || 0, brk: rec.breakSeconds || 0 };
+      const rec = data[k] || { totalSeconds: 0, breakSeconds: 0, distractions: 0 };
+      return { d, key: k, focus: rec.totalSeconds || 0, brk: rec.breakSeconds || 0, distractions: rec.distractions || 0 };
     });
 
     // chart grows taller than the goal line on days that beat the 8h goal, instead of capping
@@ -1296,8 +1460,9 @@
       const pctOfGoal = Math.round((r.focus / WEEK_GOAL_SECONDS) * 100);
       const col = document.createElement("div");
       col.className = "week-col" + (isToday ? " week-col-today" : "");
-      col.title = `${r.d.toLocaleDateString(undefined,{weekday:"long", month:"short", day:"numeric"})} — Focus ${fmtHMS(r.focus)} (${pctOfGoal}% of 8h goal), Break ${fmtHMS(r.brk)}`;
+      col.title = `${r.d.toLocaleDateString(undefined,{weekday:"long", month:"short", day:"numeric"})} — Focus ${fmtHMS(r.focus)} (${pctOfGoal}% of 8h goal), Break ${fmtHMS(r.brk)}, ${r.distractions} distraction${r.distractions === 1 ? "" : "s"}`;
       col.innerHTML = `
+        <span class="week-distraction-badge${r.distractions > 0 ? " visible" : ""}">⚡${r.distractions}</span>
         <div class="week-bar" style="height:${focusPx + breakPx}px">
           <div class="week-bar-focus" style="height:${focusPx}px"></div>
           <div class="week-bar-break" style="height:${breakPx}px"></div>
@@ -1349,9 +1514,12 @@
       } else {
         const k = todayKey(d);
         const sec = secondsByKey.get(k) || 0;
+        const distractions = (data[k] && data[k].distractions) || 0;
         const selected = k === selectedHeatmapDate;
         cell.className = `hm-cell hm-level-${heatLevel(sec, max)}` + (selected ? " hm-selected" : "");
-        const desc = sec > 0 ? `Focus ${fmtHMS(sec)}` : "No time logged";
+        const desc = sec > 0
+          ? `Focus ${fmtHMS(sec)}, ${distractions} distraction${distractions === 1 ? "" : "s"}`
+          : "No time logged";
         cell.title = `${d.toLocaleDateString(undefined,{month:"short", day:"numeric", year:"numeric"})} — ${desc}`;
         cell.addEventListener("click", () => {
           selectedHeatmapDate = (selectedHeatmapDate === k) ? null : k;
@@ -1410,11 +1578,12 @@
           <td>${fmtClock(s.end)}</td>
           <td class="num mono">${fmtHMS(s.durationSeconds)}</td>
           <td class="num mono break-cell">${(s.breakSeconds || 0) > 0 ? fmtHMS(s.breakSeconds) : "—"}</td>
+          <td class="num mono distraction-cell">${(s.distractions || 0) > 0 ? s.distractions : "—"}</td>
         </tr>`;
       }).join("");
       bodyHtml = `
         <table class="notion-table">
-          <thead><tr><th>Activity</th><th>Mode</th><th>Logged at</th><th class="num">Duration</th><th class="num">☕ Break</th></tr></thead>
+          <thead><tr><th>Activity</th><th>Mode</th><th>Logged at</th><th class="num">Duration</th><th class="num">☕ Break</th><th class="num">⚡ Distr.</th></tr></thead>
           <tbody>${rows}</tbody>
         </table>
         <div class="caption-row" style="padding-left:0;padding-right:0;padding-bottom:2px;">
