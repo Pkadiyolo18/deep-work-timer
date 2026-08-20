@@ -872,7 +872,9 @@
   let sessionDistractions = 0; // distraction count for the in-progress session
   let breakTickHandle = null;  // live-updates the status pill while paused
   let lastTickAt = null;       // wall-clock time of the last tick(), used to detect system sleep
-  const SLEEP_GAP_MS = 10000;  // a gap this much bigger than the ~250ms tick interval means the system was likely suspended
+  const SLEEP_GAP_MS = 20 * 60 * 1000; // a gap this much bigger than the ~250ms tick interval means the system was likely suspended.
+                                        // Kept well above normal background-tab throttling (e.g. switching virtual desktops),
+                                        // which can stall timers for several minutes on its own without the system actually sleeping.
   const expandedDays = new Set(); // date keys currently expanded in the History table
   const expandedActivities = new Set(); // activity names currently expanded in today's session table
   let selectedHeatmapDate = null; // date key of the heatmap cell currently drilled into
