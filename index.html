@@ -213,45 +213,79 @@
   .activity-input::placeholder{ color:var(--muted); font-weight:400; }
   .activity-input:focus{ outline:none; border-bottom-color:var(--border-strong); }
 
-  .distraction-row{
-    display:flex;
-    align-items:center;
-    justify-content:center;
-    gap:14px;
-    padding:12px 18px;
-    border-bottom:1px solid var(--border);
-  }
-  .distraction-counter{
-    display:flex;
-    align-items:center;
-    gap:10px;
-  }
-  .distraction-btn{
-    width:26px;
-    height:26px;
-    display:flex;
-    align-items:center;
-    justify-content:center;
-    border-radius:6px;
-    border:1px solid var(--border-strong);
-    background:var(--chip-bg);
-    color:var(--text);
-    font-size:15px;
-    font-weight:700;
-    line-height:1;
-    cursor:pointer;
-  }
-  .distraction-btn:hover{ background:var(--chip-bg-hover); }
-  .distraction-btn:active{ transform:scale(.93); }
-  .distraction-count{
-    min-width:18px;
-    text-align:center;
-    font-family:"Manrope",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
-    font-weight:700;
-    font-size:15px;
-    color:var(--text);
-  }
   .distraction-cell{ color:var(--red-text); }
+
+  /* post-log distraction-count popup */
+  .modal-overlay{
+    display:none;
+    position:fixed;
+    inset:0;
+    background:rgba(0,0,0,.5);
+    align-items:center;
+    justify-content:center;
+    z-index:1000;
+    padding:20px;
+  }
+  .modal-overlay.visible{ display:flex; }
+  .modal-card{
+    width:100%;
+    max-width:300px;
+    background:var(--bg);
+    border-radius:14px;
+    padding:28px 26px;
+    text-align:center;
+    box-shadow:0 24px 70px rgba(0,0,0,.4);
+  }
+  .modal-title{
+    margin:0 0 4px;
+    font-size:17px;
+    font-weight:700;
+    color:var(--text);
+    font-family:"Manrope",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+  }
+  .modal-subtitle{
+    margin:0 0 20px;
+    font-size:13px;
+    color:var(--muted);
+  }
+  .modal-label{
+    display:block;
+    margin-bottom:8px;
+    font-size:12.5px;
+    font-weight:500;
+    color:var(--muted);
+  }
+  .modal-input{
+    width:100%;
+    font-family:"Manrope",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+    font-size:26px;
+    font-weight:700;
+    text-align:center;
+    color:var(--text);
+    background:var(--chip-bg);
+    border:1px solid var(--border-strong);
+    border-radius:8px;
+    padding:10px;
+    margin-bottom:18px;
+  }
+  .modal-input:focus{ outline:none; border-color:var(--text); }
+  .modal-input::-webkit-outer-spin-button,
+  .modal-input::-webkit-inner-spin-button{ -webkit-appearance:none; margin:0; }
+  .modal-input[type=number]{ -moz-appearance:textfield; appearance:textfield; }
+  .modal-btn{
+    width:100%;
+    padding:12px 20px;
+    border-radius:8px;
+    font-size:14px;
+    font-weight:600;
+    cursor:pointer;
+    font-family:"Manrope",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+    background:var(--bg);
+    color:var(--text);
+    border:1px solid #ffffff;
+  }
+  .modal-btn:hover{ background:var(--hover); }
+  .modal-btn:active{ transform:scale(.97); }
 
   .countdown-config{
     display:none;
@@ -631,14 +665,6 @@
       <label for="activityInput" class="activity-label">🏷️ Activity</label>
       <input id="activityInput" class="activity-input" type="text" placeholder="What are you working on?" autocomplete="off">
     </div>
-    <div class="distraction-row">
-      <label class="activity-label">⚡ Distractions</label>
-      <div class="distraction-counter">
-        <button id="btnDistractionMinus" class="distraction-btn" type="button" aria-label="Decrease distraction count">−</button>
-        <span id="distractionCount" class="distraction-count">0</span>
-        <button id="btnDistractionPlus" class="distraction-btn" type="button" aria-label="Increase distraction count">+</button>
-      </div>
-    </div>
     <div id="countdownConfig" class="countdown-config visible">
       <button class="preset-btn" data-sec="1500">25m</button>
       <button class="preset-btn" data-sec="3000">50m</button>
@@ -763,6 +789,15 @@
 </div>
 </div>
 
+<div id="distractionModalOverlay" class="modal-overlay">
+  <div class="modal-card">
+    <p id="modalSessionSummary" class="modal-subtitle"></p>
+    <label class="modal-label" for="distractionInput">How many distractions?</label>
+    <input id="distractionInput" class="modal-input" type="number" min="0" step="1" value="0" inputmode="numeric">
+    <button id="btnModalLog" class="modal-btn" type="button">Log Session</button>
+  </div>
+</div>
+
 <script>
 (function(){
   "use strict";
@@ -869,8 +904,8 @@
   let isEditing = false;
   let pauseStartedAt = null;   // ms timestamp when the current pause began, null if not paused
   let sessionBreakMs = 0;      // break time accumulated so far during the in-progress session
-  let sessionDistractions = 0; // distraction count for the in-progress session
   let breakTickHandle = null;  // live-updates the status pill while paused
+  let pendingSession = null;   // session data awaiting a distraction count from the log-time popup
   let lastTickAt = null;       // wall-clock time of the last tick(), used to detect system sleep
   const SLEEP_GAP_MS = 20 * 60 * 1000; // a gap this much bigger than the ~250ms tick interval means the system was likely suspended.
                                         // Kept well above normal background-tab throttling (e.g. switching virtual desktops),
@@ -914,9 +949,10 @@
     historyList: document.getElementById("historyList"),
     totalsCountBadge: document.getElementById("totalsCountBadge"),
     activityInput: document.getElementById("activityInput"),
-    distractionCount: document.getElementById("distractionCount"),
-    btnDistractionPlus: document.getElementById("btnDistractionPlus"),
-    btnDistractionMinus: document.getElementById("btnDistractionMinus"),
+    modalOverlay: document.getElementById("distractionModalOverlay"),
+    modalSessionSummary: document.getElementById("modalSessionSummary"),
+    distractionInput: document.getElementById("distractionInput"),
+    btnModalLog: document.getElementById("btnModalLog"),
     todayDistractionsValue: document.getElementById("todayDistractionsValue"),
     allTimeDistractionsValue: document.getElementById("allTimeDistractionsValue"),
     btnFullscreen: document.getElementById("btnFullscreen"),
@@ -949,19 +985,6 @@
   el.activityInput.value = localStorage.getItem(ACTIVITY_KEY) || "";
   el.activityInput.addEventListener("input", () => {
     localStorage.setItem(ACTIVITY_KEY, el.activityInput.value);
-  });
-
-  // ---------- distraction counter (for the in-progress session) ----------
-  function updateDistractionDisplay(){
-    el.distractionCount.textContent = sessionDistractions;
-  }
-  el.btnDistractionPlus.addEventListener("click", () => {
-    sessionDistractions++;
-    updateDistractionDisplay();
-  });
-  el.btnDistractionMinus.addEventListener("click", () => {
-    if(sessionDistractions > 0) sessionDistractions--;
-    updateDistractionDisplay();
   });
 
   // ---------- fullscreen toggle ----------
@@ -1204,41 +1227,69 @@
     }
     const seconds = accumulatedMs / 1000;
     const breakSeconds = Math.round(sessionBreakMs / 1000);
-    addSession(seconds, mode, el.activityInput.value.trim(), breakSeconds, sessionDistractions);
-    setStatus(`Logged ${fmtHMS(seconds)}`, "status-done");
+    const activity = el.activityInput.value.trim();
     resetInternalOnly();
-    refreshStats();
+    openDistractionModal({ seconds, mode, activity, breakSeconds, isCountdownFinish: false });
   }
   el.btnStop.addEventListener("click", stopAndLog);
 
   function finishCountdown(){
-    // Auto-log the full target duration and alert the user.
+    // Stop the countdown, alert the user, then prompt for a distraction count before actually logging it.
     running = false;
     clearInterval(tickHandle);
     startTimestamp = null;
     accumulatedMs = countdownSeconds * 1000;
     const seconds = accumulatedMs / 1000;
     const breakSeconds = Math.round(sessionBreakMs / 1000);
-    addSession(seconds, mode, el.activityInput.value.trim(), breakSeconds, sessionDistractions);
-    setStatus(`✅ Chunk complete — logged ${fmtHMS(seconds)}`, "status-done");
+    const activity = el.activityInput.value.trim();
     beep();
     document.title = "✅ Chunk done! — Deep Work Timer";
     resetInternalOnly();
+    openDistractionModal({ seconds, mode, activity, breakSeconds, isCountdownFinish: true });
+  }
+
+  // ---------- post-log distraction-count popup ----------
+  function openDistractionModal(sessionData){
+    pendingSession = sessionData;
+    el.modalSessionSummary.textContent = `${sessionData.activity || "Untitled"} — ${fmtHMS(sessionData.seconds)}`;
+    el.distractionInput.value = "0";
+    el.modalOverlay.classList.add("visible");
+    el.distractionInput.focus();
+    el.distractionInput.select();
+  }
+
+  function commitPendingSession(){
+    if(!pendingSession) return;
+    const raw = parseInt(el.distractionInput.value, 10);
+    const distractions = (isNaN(raw) || raw < 0) ? 0 : raw;
+    addSession(pendingSession.seconds, pendingSession.mode, pendingSession.activity, pendingSession.breakSeconds, distractions);
+    setStatus(`Logged ${fmtHMS(pendingSession.seconds)}`, "status-done");
+    el.modalOverlay.classList.remove("visible");
+    pendingSession = null;
     refreshStats();
   }
+
+  el.btnModalLog.addEventListener("click", commitPendingSession);
+  el.distractionInput.addEventListener("keydown", (e) => {
+    if(e.key === "Enter"){ e.preventDefault(); commitPendingSession(); }
+  });
+  el.modalOverlay.addEventListener("click", (e) => {
+    if(e.target === el.modalOverlay) commitPendingSession(); // clicking the backdrop logs with whatever's entered, defaulting to 0
+  });
+  document.addEventListener("keydown", (e) => {
+    if(e.key === "Escape" && el.modalOverlay.classList.contains("visible")) commitPendingSession();
+  });
 
   function resetInternalOnly(){
     accumulatedMs = 0;
     startTimestamp = null;
     sessionBreakMs = 0;
-    sessionDistractions = 0;
     pauseStartedAt = null;
     lastTickAt = null;
     clearInterval(breakTickHandle);
     el.btnStart.textContent = "Start";
     el.btnStop.disabled = true;
     el.btnReset.disabled = true;
-    updateDistractionDisplay();
     render();
   }
 
@@ -1250,7 +1301,6 @@
     accumulatedMs = 0;
     startTimestamp = null;
     sessionBreakMs = 0;
-    sessionDistractions = 0;
     pauseStartedAt = null;
     lastTickAt = null;
     clearInterval(breakTickHandle);
@@ -1259,7 +1309,6 @@
     el.btnReset.disabled = true;
     setStatus("Ready", "status-ready");
     document.title = "Deep Work Timer";
-    updateDistractionDisplay();
     render();
   }
   el.btnReset.addEventListener("click", resetTimer);
@@ -1621,7 +1670,7 @@
 
   // warn before closing tab with an unlogged running/paused timer
   window.addEventListener("beforeunload", (e) => {
-    if(running || accumulatedMs > 0){
+    if(running || accumulatedMs > 0 || pendingSession !== null){
       e.preventDefault();
       e.returnValue = "";
     }
