@@ -115,6 +115,8 @@
   .fullscreen-btn:hover{ background:var(--chip-bg-hover); color:var(--text); }
   .fullscreen-btn:active{ transform:scale(.93); }
   .fullscreen-btn.active{ background:var(--btn-primary-bg); color:var(--btn-primary-text); border-color:var(--btn-primary-bg); }
+  .sheet-sync-btn{ right:58px; }
+  .sheet-sync-btn.active{ background:var(--btn-primary-bg); color:var(--btn-primary-text); border-color:var(--btn-primary-bg); }
   /* tab bar */
   .tabbar{
     display:flex;
@@ -269,6 +271,7 @@
     margin-bottom:18px;
   }
   .modal-input:focus{ outline:none; border-color:var(--text); }
+  .modal-input.text{ text-align:left; font-size:13px; font-weight:500; padding:10px 12px; }
   .modal-input::-webkit-outer-spin-button,
   .modal-input::-webkit-inner-spin-button{ -webkit-appearance:none; margin:0; }
   .modal-input[type=number]{ -moz-appearance:textfield; appearance:textfield; }
@@ -286,6 +289,27 @@
   }
   .modal-btn:hover{ background:var(--hover); }
   .modal-btn:active{ transform:scale(.97); }
+  .modal-btn.secondary{ background:var(--chip-bg); color:var(--text); border:1px solid var(--border-strong); margin-top:10px; }
+  .modal-btn.secondary:hover{ background:var(--chip-bg-hover); }
+  .modal-card.left{ text-align:left; }
+  .modal-card.left .modal-label{ text-align:left; }
+  .sheet-modal-text{ font-size:13px; color:var(--muted); line-height:1.5; margin:0 0 16px; }
+  .sheet-status{ font-size:12px; color:var(--muted); margin:-6px 0 16px; min-height:14px; }
+  .sheet-status.ok{ color:var(--green-text); }
+  .modal-close-link{
+    display:block;
+    width:100%;
+    text-align:center;
+    margin-top:14px;
+    padding:6px;
+    font-size:12.5px;
+    color:var(--muted);
+    cursor:pointer;
+    background:none;
+    border:none;
+    font-family:inherit;
+  }
+  .modal-close-link:hover{ color:var(--text); }
 
   .countdown-config{
     display:none;
@@ -655,6 +679,7 @@
 <div class="page">
 <div class="pane">
   <button id="btnFullscreen" class="fullscreen-btn" type="button" title="Enter fullscreen">⛶</button>
+  <button id="btnSheetSettings" class="fullscreen-btn sheet-sync-btn" type="button" title="Google Sheet sync">📤</button>
   <div class="tabbar">
     <button id="tabStopwatch" class="tab">⏱ Stopwatch</button>
     <button id="tabCountdown" class="tab active">⏲ Countdown</button>
@@ -798,6 +823,18 @@
   </div>
 </div>
 
+<div id="sheetModalOverlay" class="modal-overlay">
+  <div class="modal-card left">
+    <p class="sheet-modal-text">Send each logged session to a Google Sheet automatically. Nothing is sent unless you set a URL below — this is entirely optional and just for you.</p>
+    <label class="modal-label" for="sheetUrlInput">Apps Script Web App URL</label>
+    <input id="sheetUrlInput" class="modal-input text" type="url" placeholder="https://script.google.com/macros/s/…/exec" autocomplete="off">
+    <div id="sheetSyncStatus" class="sheet-status"></div>
+    <button id="btnSheetSave" class="modal-btn" type="button">Save</button>
+    <button id="btnSheetSyncNow" class="modal-btn secondary" type="button">Sync All History Now</button>
+    <button id="btnSheetClose" class="modal-close-link" type="button">Close</button>
+  </div>
+</div>
+
 <script>
 (function(){
   "use strict";
@@ -806,6 +843,7 @@
   const BACKUP_KEY = "deepWorkTimer.days.v1.backup"; // mirror of the last successful save, as a safety net
   const PREF_KEY = "deepWorkTimer.statsVisible.v1";
   const ACTIVITY_KEY = "deepWorkTimer.lastActivity.v1";
+  const SHEET_URL_KEY = "deepWorkTimer.sheetWebhookUrl.v1"; // optional Apps Script Web App URL for Google Sheet sync
 
   function escapeHtml(str){
     return String(str).replace(/[&<>"']/g, c => ({
@@ -966,6 +1004,13 @@
     heatmapMonths: document.getElementById("heatmapMonths"),
     heatmapYearLabel: document.getElementById("heatmapYearLabel"),
     heatmapDayDetail: document.getElementById("heatmapDayDetail"),
+    btnSheetSettings: document.getElementById("btnSheetSettings"),
+    sheetModalOverlay: document.getElementById("sheetModalOverlay"),
+    sheetUrlInput: document.getElementById("sheetUrlInput"),
+    sheetSyncStatus: document.getElementById("sheetSyncStatus"),
+    btnSheetSave: document.getElementById("btnSheetSave"),
+    btnSheetSyncNow: document.getElementById("btnSheetSyncNow"),
+    btnSheetClose: document.getElementById("btnSheetClose"),
   };
 
   el.statsTabTotals.addEventListener("click", () => {
@@ -1001,6 +1046,88 @@
     }
   });
   document.addEventListener("fullscreenchange", updateFullscreenButton);
+
+  // ---------- Google Sheet sync (optional, opt-in) ----------
+  function sheetWebhookUrl(){
+    return localStorage.getItem(SHEET_URL_KEY) || "";
+  }
+
+  function updateSheetStatus(msg){
+    if(msg){
+      el.sheetSyncStatus.textContent = msg;
+      el.sheetSyncStatus.classList.remove("ok");
+      return;
+    }
+    const url = sheetWebhookUrl();
+    el.sheetSyncStatus.textContent = url
+      ? "🟢 Connected — new sessions will sync automatically."
+      : "Not connected — sessions stay local only.";
+    el.sheetSyncStatus.classList.toggle("ok", !!url);
+  }
+
+  function sheetRow(dateKey, s){
+    return {
+      date: dateKey,
+      activity: s.activity || "Untitled",
+      mode: s.mode,
+      durationSeconds: s.durationSeconds,
+      breakSeconds: s.breakSeconds || 0,
+      distractions: s.distractions || 0,
+      loggedAt: s.end
+    };
+  }
+
+  function sendToSheet(row){
+    const url = sheetWebhookUrl();
+    if(!url) return;
+    // "no-cors" means we can't read whether this actually succeeded — it's fire-and-forget.
+    // Local storage stays the real source of truth regardless of whether this send lands.
+    fetch(url, {
+      method: "POST",
+      mode: "no-cors",
+      headers: { "Content-Type": "text/plain" },
+      body: JSON.stringify(row)
+    }).catch(() => { /* best-effort */ });
+  }
+
+  el.sheetUrlInput.value = sheetWebhookUrl();
+  updateSheetStatus();
+
+  el.btnSheetSettings.addEventListener("click", () => {
+    el.sheetModalOverlay.classList.add("visible");
+  });
+  el.btnSheetClose.addEventListener("click", () => {
+    el.sheetModalOverlay.classList.remove("visible");
+  });
+  el.sheetModalOverlay.addEventListener("click", (e) => {
+    if(e.target === el.sheetModalOverlay) el.sheetModalOverlay.classList.remove("visible");
+  });
+
+  el.btnSheetSave.addEventListener("click", () => {
+    const url = el.sheetUrlInput.value.trim();
+    if(url){
+      localStorage.setItem(SHEET_URL_KEY, url);
+    } else {
+      localStorage.removeItem(SHEET_URL_KEY);
+    }
+    updateSheetStatus();
+  });
+
+  el.btnSheetSyncNow.addEventListener("click", () => {
+    if(!sheetWebhookUrl()){
+      updateSheetStatus("Add and save a URL first.");
+      return;
+    }
+    const data = loadAll();
+    let count = 0;
+    Object.keys(data).forEach(dateKey => {
+      (data[dateKey].sessions || []).forEach(s => {
+        sendToSheet(sheetRow(dateKey, s));
+        count++;
+      });
+    });
+    updateSheetStatus(`Sent ${count} session${count === 1 ? "" : "s"} — check your sheet in a few seconds.`);
+  });
 
   function setStatus(text, cls){
     el.statusLine.textContent = text;
@@ -1263,6 +1390,14 @@
     const raw = parseInt(el.distractionInput.value, 10);
     const distractions = (isNaN(raw) || raw < 0) ? 0 : raw;
     addSession(pendingSession.seconds, pendingSession.mode, pendingSession.activity, pendingSession.breakSeconds, distractions);
+    sendToSheet(sheetRow(todayKey(), {
+      activity: pendingSession.activity,
+      mode: pendingSession.mode,
+      durationSeconds: pendingSession.seconds,
+      breakSeconds: pendingSession.breakSeconds,
+      distractions,
+      end: new Date().toISOString()
+    }));
     setStatus(`Logged ${fmtHMS(pendingSession.seconds)}`, "status-done");
     el.modalOverlay.classList.remove("visible");
     pendingSession = null;
