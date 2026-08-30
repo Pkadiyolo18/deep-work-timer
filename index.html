@@ -1080,7 +1080,9 @@
       endTime: fmtClock(s.end),
       duration: fmtHMS(s.durationSeconds),
       breakTime: fmtHMS(s.breakSeconds || 0),
-      distractions: s.distractions || 0
+      distractions: s.distractions || 0,
+      startISO: startIso, // exact timestamps, kept only to build the Google Calendar feed reliably
+      endISO: s.end
     };
   }
 
