@@ -882,7 +882,7 @@
     localStorage.setItem(BACKUP_KEY, json); // mirror every save so one bad read can't erase everything
   }
 
-  function addSession(durationSeconds, mode, activity, breakSeconds, distractions){
+  function addSession(durationSeconds, mode, activity, breakSeconds, distractions, startedAt){
     if(durationSeconds <= 0) return;
     breakSeconds = breakSeconds || 0;
     distractions = distractions || 0;
@@ -895,6 +895,7 @@
     data[key].breakSeconds += breakSeconds;
     data[key].distractions += distractions;
     data[key].sessions.push({
+      start: startedAt || null, // wall-clock time the timer was first started for this chunk
       end: new Date().toISOString(),
       durationSeconds,
       mode,
@@ -942,6 +943,7 @@
   let isEditing = false;
   let pauseStartedAt = null;   // ms timestamp when the current pause began, null if not paused
   let sessionBreakMs = 0;      // break time accumulated so far during the in-progress session
+  let sessionStartedAt = null; // ISO timestamp of the first Start click for the in-progress chunk (not overwritten on resume)
   let breakTickHandle = null;  // live-updates the status pill while paused
   let pendingSession = null;   // session data awaiting a distraction count from the log-time popup
   let lastTickAt = null;       // wall-clock time of the last tick(), used to detect system sleep
@@ -1066,14 +1068,19 @@
   }
 
   function sheetRow(dateKey, s){
+    // Older sessions logged before start-time tracking don't have s.start — approximate it
+    // by working backwards from the end time. Not exact for sessions interrupted by sleep,
+    // but close enough, and only ever used as a fallback.
+    const startIso = s.start || new Date(new Date(s.end).getTime() - (s.durationSeconds + (s.breakSeconds || 0)) * 1000).toISOString();
     return {
       date: dateKey,
       activity: s.activity || "Untitled",
       mode: s.mode,
-      durationSeconds: s.durationSeconds,
-      breakSeconds: s.breakSeconds || 0,
-      distractions: s.distractions || 0,
-      loggedAt: s.end
+      startTime: fmtClock(startIso),
+      endTime: fmtClock(s.end),
+      duration: fmtHMS(s.durationSeconds),
+      breakTime: fmtHMS(s.breakSeconds || 0),
+      distractions: s.distractions || 0
     };
   }
 
@@ -1300,6 +1307,9 @@
       pauseStartedAt = null;
       clearInterval(breakTickHandle);
     }
+    if(sessionStartedAt === null){
+      sessionStartedAt = new Date().toISOString();
+    }
     running = true;
     startTimestamp = Date.now();
     el.btnStart.textContent = "Pause";
@@ -1355,8 +1365,9 @@
     const seconds = accumulatedMs / 1000;
     const breakSeconds = Math.round(sessionBreakMs / 1000);
     const activity = el.activityInput.value.trim();
+    const startedAt = sessionStartedAt;
     resetInternalOnly();
-    openDistractionModal({ seconds, mode, activity, breakSeconds, isCountdownFinish: false });
+    openDistractionModal({ seconds, mode, activity, breakSeconds, startedAt, isCountdownFinish: false });
   }
   el.btnStop.addEventListener("click", stopAndLog);
 
@@ -1369,10 +1380,11 @@
     const seconds = accumulatedMs / 1000;
     const breakSeconds = Math.round(sessionBreakMs / 1000);
     const activity = el.activityInput.value.trim();
+    const startedAt = sessionStartedAt;
     beep();
     document.title = "✅ Chunk done! — Deep Work Timer";
     resetInternalOnly();
-    openDistractionModal({ seconds, mode, activity, breakSeconds, isCountdownFinish: true });
+    openDistractionModal({ seconds, mode, activity, breakSeconds, startedAt, isCountdownFinish: true });
   }
 
   // ---------- post-log distraction-count popup ----------
@@ -1389,13 +1401,14 @@
     if(!pendingSession) return;
     const raw = parseInt(el.distractionInput.value, 10);
     const distractions = (isNaN(raw) || raw < 0) ? 0 : raw;
-    addSession(pendingSession.seconds, pendingSession.mode, pendingSession.activity, pendingSession.breakSeconds, distractions);
+    addSession(pendingSession.seconds, pendingSession.mode, pendingSession.activity, pendingSession.breakSeconds, distractions, pendingSession.startedAt);
     sendToSheet(sheetRow(todayKey(), {
       activity: pendingSession.activity,
       mode: pendingSession.mode,
       durationSeconds: pendingSession.seconds,
       breakSeconds: pendingSession.breakSeconds,
       distractions,
+      start: pendingSession.startedAt,
       end: new Date().toISOString()
     }));
     setStatus(`Logged ${fmtHMS(pendingSession.seconds)}`, "status-done");
@@ -1419,6 +1432,7 @@
     accumulatedMs = 0;
     startTimestamp = null;
     sessionBreakMs = 0;
+    sessionStartedAt = null;
     pauseStartedAt = null;
     lastTickAt = null;
     clearInterval(breakTickHandle);
@@ -1436,6 +1450,7 @@
     accumulatedMs = 0;
     startTimestamp = null;
     sessionBreakMs = 0;
+    sessionStartedAt = null;
     pauseStartedAt = null;
     lastTickAt = null;
     clearInterval(breakTickHandle);
