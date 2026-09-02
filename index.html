@@ -946,10 +946,6 @@
   let sessionStartedAt = null; // ISO timestamp of the first Start click for the in-progress chunk (not overwritten on resume)
   let breakTickHandle = null;  // live-updates the status pill while paused
   let pendingSession = null;   // session data awaiting a distraction count from the log-time popup
-  let lastTickAt = null;       // wall-clock time of the last tick(), used to detect system sleep
-  const SLEEP_GAP_MS = 20 * 60 * 1000; // a gap this much bigger than the ~250ms tick interval means the system was likely suspended.
-                                        // Kept well above normal background-tab throttling (e.g. switching virtual desktops),
-                                        // which can stall timers for several minutes on its own without the system actually sleeping.
   const expandedDays = new Set(); // date keys currently expanded in the History table
   const expandedActivities = new Set(); // activity names currently expanded in today's session table
   let selectedHeatmapDate = null; // date key of the heatmap cell currently drilled into
@@ -1265,18 +1261,6 @@
   }
 
   function tick(){
-    const now = Date.now();
-    const priorGoodTime = lastTickAt === null ? now : lastTickAt;
-    const gap = now - priorGoodTime;
-    lastTickAt = now;
-
-    if(gap > SLEEP_GAP_MS){
-      // the interval didn't fire for a long stretch — the system was very likely asleep/suspended.
-      // Freeze work time at the last known-good moment instead of crediting the sleep gap as focus time.
-      handleSleepPause(priorGoodTime);
-      return;
-    }
-
     render();
     if(mode === "countdown"){
       const targetMs = countdownSeconds * 1000;
@@ -1284,20 +1268,6 @@
         finishCountdown();
       }
     }
-  }
-
-  function handleSleepPause(asOfTime){
-    if(!running) return;
-    accumulatedMs = accumulatedMs + (asOfTime - startTimestamp);
-    startTimestamp = null;
-    running = false;
-    clearInterval(tickHandle);
-    pauseStartedAt = Date.now();
-    el.btnStart.textContent = "Resume";
-    el.btnReset.disabled = false;
-    setStatus("⏸ Paused — your computer went to sleep", "status-paused");
-    breakTickHandle = setInterval(updatePauseStatus, 1000);
-    render();
   }
 
   function startTimer(){
@@ -1322,7 +1292,6 @@
     } else {
       setStatus("Timing…", "status-running");
     }
-    lastTickAt = Date.now();
     tickHandle = setInterval(tick, 250);
     render();
   }
@@ -1436,7 +1405,6 @@
     sessionBreakMs = 0;
     sessionStartedAt = null;
     pauseStartedAt = null;
-    lastTickAt = null;
     clearInterval(breakTickHandle);
     el.btnStart.textContent = "Start";
     el.btnStop.disabled = true;
@@ -1454,7 +1422,6 @@
     sessionBreakMs = 0;
     sessionStartedAt = null;
     pauseStartedAt = null;
-    lastTickAt = null;
     clearInterval(breakTickHandle);
     el.btnStart.textContent = "Start";
     el.btnStop.disabled = true;
