@@ -273,7 +273,30 @@
     font-size:11px;
     color:var(--muted);
     text-align:center;
-    margin:2px 0 20px;
+    margin:2px 0 18px;
+  }
+  .modal-stats-row{
+    display:flex;
+    gap:8px;
+    margin-bottom:20px;
+  }
+  .modal-stat{ flex:1; text-align:center; }
+  .modal-stat .modal-label{ margin-bottom:6px; }
+  .modal-time-value{
+    font-family:"Manrope",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+    font-size:13.5px;
+    font-weight:600;
+    color:var(--text);
+    background:var(--chip-bg);
+    border:1px solid var(--border-strong);
+    border-radius:8px;
+    padding:8px 4px;
+    cursor:text;
+  }
+  .modal-time-value.readonly{ color:var(--yellow-text); cursor:default; }
+  .modal-time-value[contenteditable="true"]{
+    outline:none;
+    box-shadow: inset 0 0 0 1px var(--text);
   }
   .modal-label{
     display:block;
@@ -844,6 +867,20 @@
     <p id="modalActivityLabel" class="modal-subtitle"></p>
     <div id="modalDurationDisplay" class="modal-duration" tabindex="0">00:00</div>
     <div class="modal-duration-hint">click the time to edit it — try "45" or "45:30"</div>
+    <div class="modal-stats-row">
+      <div class="modal-stat">
+        <div class="modal-label">Start</div>
+        <div id="modalStartDisplay" class="modal-time-value" tabindex="0"></div>
+      </div>
+      <div class="modal-stat">
+        <div class="modal-label">End</div>
+        <div id="modalEndDisplay" class="modal-time-value" tabindex="0"></div>
+      </div>
+      <div class="modal-stat">
+        <div class="modal-label">☕ Break</div>
+        <div id="modalBreakDisplay" class="modal-time-value readonly"></div>
+      </div>
+    </div>
     <label class="modal-label" for="distractionInput">How many distractions?</label>
     <input id="distractionInput" class="modal-input" type="number" min="0" step="1" value="0" inputmode="numeric">
     <button id="btnModalLog" class="modal-btn" type="button">Log Session</button>
@@ -909,7 +946,7 @@
     localStorage.setItem(BACKUP_KEY, json); // mirror every save so one bad read can't erase everything
   }
 
-  function addSession(durationSeconds, mode, activity, breakSeconds, distractions, startedAt){
+  function addSession(durationSeconds, mode, activity, breakSeconds, distractions, startedAt, endedAt){
     if(durationSeconds <= 0) return;
     breakSeconds = breakSeconds || 0;
     distractions = distractions || 0;
@@ -923,7 +960,7 @@
     data[key].distractions += distractions;
     data[key].sessions.push({
       start: startedAt || null, // wall-clock time the timer was first started for this chunk
-      end: new Date().toISOString(),
+      end: endedAt || new Date().toISOString(),
       durationSeconds,
       mode,
       activity: activity || "Untitled",
@@ -1015,6 +1052,9 @@
     modalOverlay: document.getElementById("distractionModalOverlay"),
     modalActivityLabel: document.getElementById("modalActivityLabel"),
     modalDurationDisplay: document.getElementById("modalDurationDisplay"),
+    modalStartDisplay: document.getElementById("modalStartDisplay"),
+    modalEndDisplay: document.getElementById("modalEndDisplay"),
+    modalBreakDisplay: document.getElementById("modalBreakDisplay"),
     distractionInput: document.getElementById("distractionInput"),
     btnModalLog: document.getElementById("btnModalLog"),
     todayDistractionsValue: document.getElementById("todayDistractionsValue"),
@@ -1091,11 +1131,15 @@
     el.sheetSyncStatus.classList.toggle("ok", !!url);
   }
 
-  function sheetRow(dateKey, s){
+  function sessionStartIso(s){
     // Older sessions logged before start-time tracking don't have s.start — approximate it
     // by working backwards from the end time. Not exact for sessions interrupted by sleep,
     // but close enough, and only ever used as a fallback.
-    const startIso = s.start || new Date(new Date(s.end).getTime() - (s.durationSeconds + (s.breakSeconds || 0)) * 1000).toISOString();
+    return s.start || new Date(new Date(s.end).getTime() - (s.durationSeconds + (s.breakSeconds || 0)) * 1000).toISOString();
+  }
+
+  function sheetRow(dateKey, s){
+    const startIso = sessionStartIso(s);
     return {
       date: dateKey,
       activity: s.activity || "Untitled",
@@ -1211,6 +1255,27 @@
     const n = Number(text);
     if(isNaN(n) || n < 0) return null;
     return Math.round(n * 60); // bare number = minutes
+  }
+
+  // Parses a clock time like "2:15 PM", "2:15pm", "14:15", or "2pm" and returns a full ISO
+  // timestamp on the same calendar day as referenceIso (only the time-of-day is being corrected).
+  function parseClockInput(text, referenceIso){
+    text = (text || "").trim();
+    const m = text.match(/^(\d{1,2})(?::(\d{2}))?\s*([AaPp][Mm])?$/);
+    if(!m) return null;
+    let hour = parseInt(m[1], 10);
+    const minute = m[2] ? parseInt(m[2], 10) : 0;
+    const ampm = m[3] ? m[3].toUpperCase() : null;
+    if(isNaN(hour) || isNaN(minute) || minute > 59) return null;
+    if(ampm){
+      if(hour < 1 || hour > 12) return null;
+      hour = (ampm === "AM") ? (hour === 12 ? 0 : hour) : (hour === 12 ? 12 : hour + 12);
+    } else if(hour < 0 || hour > 23){
+      return null;
+    }
+    const ref = new Date(referenceIso);
+    if(isNaN(ref.getTime())) return null;
+    return new Date(ref.getFullYear(), ref.getMonth(), ref.getDate(), hour, minute, 0, 0).toISOString();
   }
 
   function canEditNow(){
@@ -1365,8 +1430,9 @@
     const breakSeconds = Math.round(sessionBreakMs / 1000);
     const activity = el.activityInput.value.trim();
     const startedAt = sessionStartedAt;
+    const endedAt = new Date().toISOString();
     resetInternalOnly();
-    openDistractionModal({ seconds, mode, activity, breakSeconds, startedAt, isCountdownFinish: false });
+    openDistractionModal({ seconds, mode, activity, breakSeconds, startedAt, endedAt, isCountdownFinish: false });
   }
   el.btnStop.addEventListener("click", stopAndLog);
 
@@ -1380,10 +1446,11 @@
     const breakSeconds = Math.round(sessionBreakMs / 1000);
     const activity = el.activityInput.value.trim();
     const startedAt = sessionStartedAt;
+    const endedAt = new Date().toISOString();
     beep();
     document.title = "✅ Chunk done! — Deep Work Timer";
     resetInternalOnly();
-    openDistractionModal({ seconds, mode, activity, breakSeconds, startedAt, isCountdownFinish: true });
+    openDistractionModal({ seconds, mode, activity, breakSeconds, startedAt, endedAt, isCountdownFinish: true });
   }
 
   // ---------- post-log distraction-count popup ----------
@@ -1391,19 +1458,31 @@
     pendingSession = sessionData;
     el.modalActivityLabel.textContent = sessionData.activity || "Untitled";
     el.modalDurationDisplay.textContent = fmtHMS(sessionData.seconds);
+    el.modalStartDisplay.textContent = fmtClock(sessionData.startedAt || sessionData.endedAt);
+    el.modalEndDisplay.textContent = fmtClock(sessionData.endedAt);
+    el.modalBreakDisplay.textContent = fmtHMS(sessionData.breakSeconds || 0);
     el.distractionInput.value = "0";
     el.modalOverlay.classList.add("visible");
     el.distractionInput.focus();
     el.distractionInput.select();
   }
 
-  // ---------- click-to-edit the logged duration, before it's saved ----------
-  function enterModalDurationEdit(){
+  // If Start or End gets corrected, keep Duration in sync with the new span (minus existing break).
+  // Editing Duration directly does NOT move Start/End — it just adjusts the focus time credited.
+  function recalcPendingDuration(){
+    if(!pendingSession || !pendingSession.startedAt || !pendingSession.endedAt) return;
+    const spanSeconds = Math.round((new Date(pendingSession.endedAt) - new Date(pendingSession.startedAt)) / 1000);
+    pendingSession.seconds = Math.max(0, spanSeconds - (pendingSession.breakSeconds || 0));
+    el.modalDurationDisplay.textContent = fmtHMS(pendingSession.seconds);
+  }
+
+  // ---------- click-to-edit the logged duration/start/end, before it's saved ----------
+  function enterModalFieldEdit(field){
     if(!pendingSession) return;
-    el.modalDurationDisplay.setAttribute("contenteditable", "true");
-    el.modalDurationDisplay.focus();
+    field.setAttribute("contenteditable", "true");
+    field.focus();
     const range = document.createRange();
-    range.selectNodeContents(el.modalDurationDisplay);
+    range.selectNodeContents(field);
     const sel = window.getSelection();
     sel.removeAllRanges();
     sel.addRange(range);
@@ -1419,7 +1498,33 @@
     }
   }
 
-  el.modalDurationDisplay.addEventListener("click", enterModalDurationEdit);
+  function commitModalStartEdit(){
+    if(!el.modalStartDisplay.hasAttribute("contenteditable")) return;
+    el.modalStartDisplay.removeAttribute("contenteditable");
+    if(pendingSession){
+      const parsed = parseClockInput(el.modalStartDisplay.textContent, pendingSession.startedAt || pendingSession.endedAt);
+      if(parsed !== null){
+        pendingSession.startedAt = parsed;
+        recalcPendingDuration();
+      }
+      el.modalStartDisplay.textContent = fmtClock(pendingSession.startedAt || pendingSession.endedAt);
+    }
+  }
+
+  function commitModalEndEdit(){
+    if(!el.modalEndDisplay.hasAttribute("contenteditable")) return;
+    el.modalEndDisplay.removeAttribute("contenteditable");
+    if(pendingSession){
+      const parsed = parseClockInput(el.modalEndDisplay.textContent, pendingSession.endedAt);
+      if(parsed !== null){
+        pendingSession.endedAt = parsed;
+        recalcPendingDuration();
+      }
+      el.modalEndDisplay.textContent = fmtClock(pendingSession.endedAt);
+    }
+  }
+
+  el.modalDurationDisplay.addEventListener("click", () => enterModalFieldEdit(el.modalDurationDisplay));
   el.modalDurationDisplay.addEventListener("blur", commitModalDurationEdit);
   el.modalDurationDisplay.addEventListener("keydown", (e) => {
     if(e.key === "Enter"){ e.preventDefault(); el.modalDurationDisplay.blur(); }
@@ -1434,12 +1539,38 @@
     if(e.data && !/[0-9:]/.test(e.data)){ e.preventDefault(); }
   });
 
+  el.modalStartDisplay.addEventListener("click", () => enterModalFieldEdit(el.modalStartDisplay));
+  el.modalStartDisplay.addEventListener("blur", commitModalStartEdit);
+  el.modalStartDisplay.addEventListener("keydown", (e) => {
+    if(e.key === "Enter"){ e.preventDefault(); el.modalStartDisplay.blur(); }
+    else if(e.key === "Escape"){
+      e.preventDefault();
+      el.modalStartDisplay.removeAttribute("contenteditable");
+      if(pendingSession) el.modalStartDisplay.textContent = fmtClock(pendingSession.startedAt || pendingSession.endedAt);
+      el.modalStartDisplay.blur();
+    }
+  });
+
+  el.modalEndDisplay.addEventListener("click", () => enterModalFieldEdit(el.modalEndDisplay));
+  el.modalEndDisplay.addEventListener("blur", commitModalEndEdit);
+  el.modalEndDisplay.addEventListener("keydown", (e) => {
+    if(e.key === "Enter"){ e.preventDefault(); el.modalEndDisplay.blur(); }
+    else if(e.key === "Escape"){
+      e.preventDefault();
+      el.modalEndDisplay.removeAttribute("contenteditable");
+      if(pendingSession) el.modalEndDisplay.textContent = fmtClock(pendingSession.endedAt);
+      el.modalEndDisplay.blur();
+    }
+  });
+
   function commitPendingSession(){
     if(!pendingSession) return;
     commitModalDurationEdit(); // in case they were still mid-edit when this got triggered
+    commitModalStartEdit();
+    commitModalEndEdit();
     const raw = parseInt(el.distractionInput.value, 10);
     const distractions = (isNaN(raw) || raw < 0) ? 0 : raw;
-    addSession(pendingSession.seconds, pendingSession.mode, pendingSession.activity, pendingSession.breakSeconds, distractions, pendingSession.startedAt);
+    addSession(pendingSession.seconds, pendingSession.mode, pendingSession.activity, pendingSession.breakSeconds, distractions, pendingSession.startedAt, pendingSession.endedAt);
     sendToSheet(sheetRow(todayKey(), {
       activity: pendingSession.activity,
       mode: pendingSession.mode,
@@ -1447,7 +1578,7 @@
       breakSeconds: pendingSession.breakSeconds,
       distractions,
       start: pendingSession.startedAt,
-      end: new Date().toISOString()
+      end: pendingSession.endedAt
     }));
     setStatus(`Logged ${fmtHMS(pendingSession.seconds)}`, "status-done");
     el.modalOverlay.classList.remove("visible");
@@ -1579,6 +1710,7 @@
               const modeLabel = s.mode === "countdown" ? "⏲ Countdown" : "⏱ Stopwatch";
               return `<tr>
                 <td><span class="tag-pill ${tagClass}">${modeLabel}</span></td>
+                <td>${fmtClock(sessionStartIso(s))}</td>
                 <td>${fmtClock(s.end)}</td>
                 <td class="num mono">${fmtHMS(s.durationSeconds)}</td>
                 <td class="num mono break-cell">${(s.breakSeconds || 0) > 0 ? fmtHMS(s.breakSeconds) : "—"}</td>
@@ -1587,7 +1719,7 @@
             }).join("");
           detailTr.innerHTML = `<td colspan="5">
             <table class="notion-table nested">
-              <thead><tr><th>Mode</th><th>Logged at</th><th class="num">Duration</th><th class="num">☕ Break</th><th class="num">⚡ Distr.</th></tr></thead>
+              <thead><tr><th>Mode</th><th>Start</th><th>End</th><th class="num">Duration</th><th class="num">☕ Break</th><th class="num">⚡ Distr.</th></tr></thead>
               <tbody>${rowsHtml}</tbody>
             </table>
           </td>`;
@@ -1634,13 +1766,14 @@
           detailTr.className = "day-detail-row";
           const sessions = data[k].sessions || [];
           const rowsHtml = sessions.length === 0
-            ? `<tr class="empty-row"><td colspan="6">No sessions recorded.</td></tr>`
+            ? `<tr class="empty-row"><td colspan="7">No sessions recorded.</td></tr>`
             : [...sessions].reverse().map(s => {
                 const tagClass = s.mode === "countdown" ? "tag-purple" : "tag-blue";
                 const modeLabel = s.mode === "countdown" ? "⏲ Countdown" : "⏱ Stopwatch";
                 return `<tr>
                   <td>${escapeHtml(s.activity || "Untitled")}</td>
                   <td><span class="tag-pill ${tagClass}">${modeLabel}</span></td>
+                  <td>${fmtClock(sessionStartIso(s))}</td>
                   <td>${fmtClock(s.end)}</td>
                   <td class="num mono">${fmtHMS(s.durationSeconds)}</td>
                   <td class="num mono break-cell">${(s.breakSeconds || 0) > 0 ? fmtHMS(s.breakSeconds) : "—"}</td>
@@ -1649,7 +1782,7 @@
               }).join("");
           detailTr.innerHTML = `<td colspan="4">
             <table class="notion-table nested">
-              <thead><tr><th>Activity</th><th>Mode</th><th>Logged at</th><th class="num">Duration</th><th class="num">☕ Break</th><th class="num">⚡ Distr.</th></tr></thead>
+              <thead><tr><th>Activity</th><th>Mode</th><th>Start</th><th>End</th><th class="num">Duration</th><th class="num">☕ Break</th><th class="num">⚡ Distr.</th></tr></thead>
               <tbody>${rowsHtml}</tbody>
             </table>
           </td>`;
@@ -1812,6 +1945,7 @@
         return `<tr>
           <td>${escapeHtml(s.activity || "Untitled")}</td>
           <td><span class="tag-pill ${tagClass}">${modeLabel}</span></td>
+          <td>${fmtClock(sessionStartIso(s))}</td>
           <td>${fmtClock(s.end)}</td>
           <td class="num mono">${fmtHMS(s.durationSeconds)}</td>
           <td class="num mono break-cell">${(s.breakSeconds || 0) > 0 ? fmtHMS(s.breakSeconds) : "—"}</td>
@@ -1820,7 +1954,7 @@
       }).join("");
       bodyHtml = `
         <table class="notion-table">
-          <thead><tr><th>Activity</th><th>Mode</th><th>Logged at</th><th class="num">Duration</th><th class="num">☕ Break</th><th class="num">⚡ Distr.</th></tr></thead>
+          <thead><tr><th>Activity</th><th>Mode</th><th>Start</th><th>End</th><th class="num">Duration</th><th class="num">☕ Break</th><th class="num">⚡ Distr.</th></tr></thead>
           <tbody>${rows}</tbody>
         </table>
         <div class="caption-row" style="padding-left:0;padding-right:0;padding-bottom:2px;">
