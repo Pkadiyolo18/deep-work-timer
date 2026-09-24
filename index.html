@@ -87,6 +87,38 @@
     flex-direction:column;
     gap:24px;
   }
+  .sheet-warning-banner{
+    display:none;
+    align-items:center;
+    gap:10px;
+    background:var(--red-bg);
+    color:var(--red-text);
+    border:1px solid var(--red-text);
+    border-radius:10px;
+    padding:12px 14px;
+    font-size:13px;
+    font-weight:500;
+  }
+  .sheet-warning-banner.visible{ display:flex; }
+  .sheet-warning-text{ flex:1; }
+  .sheet-warning-banner button{
+    background:none;
+    border:1px solid currentColor;
+    color:inherit;
+    border-radius:6px;
+    padding:5px 10px;
+    font-size:12px;
+    font-weight:600;
+    cursor:pointer;
+    font-family:inherit;
+    flex-shrink:0;
+  }
+  .sheet-warning-banner button:hover{ background:rgba(0,0,0,.08); }
+  .sheet-warning-dismiss{
+    border:none !important;
+    padding:2px 6px !important;
+    font-size:14px !important;
+  }
   .pane{
     position:relative;
     padding:40px;
@@ -725,6 +757,11 @@
 <body>
 
 <div class="page">
+<div id="sheetWarningBanner" class="sheet-warning-banner">
+  <span class="sheet-warning-text">⚠️ Google Sheet sync isn't connected — your saved link may have been cleared.</span>
+  <button id="btnSheetWarningFix" type="button">Reconnect</button>
+  <button id="btnSheetWarningDismiss" type="button" class="sheet-warning-dismiss" aria-label="Dismiss">✕</button>
+</div>
 <div class="pane">
   <button id="btnFullscreen" class="fullscreen-btn" type="button" title="Enter fullscreen">⛶</button>
   <button id="btnSheetSettings" class="fullscreen-btn sheet-sync-btn" type="button" title="Google Sheet sync">📤</button>
@@ -908,6 +945,7 @@
   const PREF_KEY = "deepWorkTimer.statsVisible.v1";
   const ACTIVITY_KEY = "deepWorkTimer.lastActivity.v1";
   const SHEET_URL_KEY = "deepWorkTimer.sheetWebhookUrl.v1"; // optional Apps Script Web App URL for Google Sheet sync
+  const SHEET_EVER_CONFIGURED_KEY = "deepWorkTimer.sheetEverConfigured.v1"; // set once a URL is saved; used to warn if it later vanishes
 
   function escapeHtml(str){
     return String(str).replace(/[&<>"']/g, c => ({
@@ -1077,6 +1115,9 @@
     btnSheetSave: document.getElementById("btnSheetSave"),
     btnSheetSyncNow: document.getElementById("btnSheetSyncNow"),
     btnSheetClose: document.getElementById("btnSheetClose"),
+    sheetWarningBanner: document.getElementById("sheetWarningBanner"),
+    btnSheetWarningFix: document.getElementById("btnSheetWarningFix"),
+    btnSheetWarningDismiss: document.getElementById("btnSheetWarningDismiss"),
   };
 
   el.statsTabTotals.addEventListener("click", () => {
@@ -1131,6 +1172,12 @@
     el.sheetSyncStatus.classList.toggle("ok", !!url);
   }
 
+  function updateSheetWarningBanner(){
+    const everConfigured = localStorage.getItem(SHEET_EVER_CONFIGURED_KEY) === "1";
+    const show = everConfigured && !sheetWebhookUrl();
+    el.sheetWarningBanner.classList.toggle("visible", show);
+  }
+
   function sessionStartIso(s){
     // Older sessions logged before start-time tracking don't have s.start — approximate it
     // by working backwards from the end time. Not exact for sessions interrupted by sleep,
@@ -1169,6 +1216,7 @@
 
   el.sheetUrlInput.value = sheetWebhookUrl();
   updateSheetStatus();
+  updateSheetWarningBanner();
 
   el.btnSheetSettings.addEventListener("click", () => {
     el.sheetModalOverlay.classList.add("visible");
@@ -1184,10 +1232,15 @@
     const url = el.sheetUrlInput.value.trim();
     if(url){
       localStorage.setItem(SHEET_URL_KEY, url);
+      localStorage.setItem(SHEET_EVER_CONFIGURED_KEY, "1");
     } else {
+      // Explicitly clearing the field is treated as an intentional opt-out, not a loss —
+      // don't warn about it disappearing later.
       localStorage.removeItem(SHEET_URL_KEY);
+      localStorage.removeItem(SHEET_EVER_CONFIGURED_KEY);
     }
     updateSheetStatus();
+    updateSheetWarningBanner();
   });
 
   el.btnSheetSyncNow.addEventListener("click", () => {
@@ -1204,6 +1257,15 @@
       });
     });
     updateSheetStatus(`Sent ${count} session${count === 1 ? "" : "s"} — check your sheet in a few seconds.`);
+  });
+
+  el.btnSheetWarningFix.addEventListener("click", () => {
+    el.sheetModalOverlay.classList.add("visible");
+  });
+  el.btnSheetWarningDismiss.addEventListener("click", () => {
+    // Hides for this page load only — if the URL is still missing next time you open the app,
+    // it'll warn again rather than silently staying broken.
+    el.sheetWarningBanner.classList.remove("visible");
   });
 
   function setStatus(text, cls){
@@ -1704,7 +1766,7 @@
           const detailTr = document.createElement("tr");
           detailTr.className = "day-detail-row";
           const rowsHtml = [...g.entries]
-            .sort((a,b) => new Date(b.end) - new Date(a.end))
+            .sort((a,b) => new Date(a.end) - new Date(b.end))
             .map(s => {
               const tagClass = s.mode === "countdown" ? "tag-purple" : "tag-blue";
               const modeLabel = s.mode === "countdown" ? "⏲ Countdown" : "⏱ Stopwatch";
@@ -1767,7 +1829,7 @@
           const sessions = data[k].sessions || [];
           const rowsHtml = sessions.length === 0
             ? `<tr class="empty-row"><td colspan="7">No sessions recorded.</td></tr>`
-            : [...sessions].reverse().map(s => {
+            : [...sessions].sort((a,b) => new Date(a.end) - new Date(b.end)).map(s => {
                 const tagClass = s.mode === "countdown" ? "tag-purple" : "tag-blue";
                 const modeLabel = s.mode === "countdown" ? "⏲ Countdown" : "⏱ Stopwatch";
                 return `<tr>
@@ -1939,7 +2001,7 @@
     if(!rec || !rec.sessions || rec.sessions.length === 0){
       bodyHtml = `<div class="empty-note" style="padding:4px 0 2px;color:var(--muted);font-size:13px;">No sessions logged that day.</div>`;
     } else {
-      const rows = [...rec.sessions].reverse().map(s => {
+      const rows = [...rec.sessions].sort((a,b) => new Date(a.end) - new Date(b.end)).map(s => {
         const tagClass = s.mode === "countdown" ? "tag-purple" : "tag-blue";
         const modeLabel = s.mode === "countdown" ? "⏲ Countdown" : "⏱ Stopwatch";
         return `<tr>
