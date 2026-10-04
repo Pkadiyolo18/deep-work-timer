@@ -369,6 +369,25 @@
   }
   .modal-btn:hover{ background:var(--hover); }
   .modal-btn:active{ transform:scale(.97); }
+  .break-chips{
+    display:flex;
+    flex-wrap:wrap;
+    justify-content:center;
+    gap:6px;
+    margin:-6px 0 18px;
+  }
+  .break-chip{
+    border:1px solid var(--border-strong);
+    background:var(--chip-bg);
+    color:var(--text);
+    padding:5px 11px;
+    border-radius:14px;
+    font-size:12px;
+    font-weight:500;
+    font-family:inherit;
+    cursor:pointer;
+  }
+  .break-chip:hover{ background:var(--chip-bg-hover); }
   .modal-btn.secondary{ background:var(--chip-bg); color:var(--text); border:1px solid var(--border-strong); margin-top:10px; }
   .modal-btn.secondary:hover{ background:var(--chip-bg-hover); }
   .modal-card.left{ text-align:left; }
@@ -924,6 +943,22 @@
   </div>
 </div>
 
+<div id="breakModalOverlay" class="modal-overlay">
+  <div class="modal-card">
+    <p class="modal-subtitle">⏸ Paused</p>
+    <label class="modal-label" for="breakReasonInput">Reason for the break?</label>
+    <input id="breakReasonInput" class="modal-input text" type="text" placeholder="e.g. bathroom, phone call…" autocomplete="off" maxlength="80">
+    <div class="break-chips">
+      <button class="break-chip" type="button" data-reason="Bathroom">Bathroom</button>
+      <button class="break-chip" type="button" data-reason="Food / water">Food / water</button>
+      <button class="break-chip" type="button" data-reason="Stretch">Stretch</button>
+      <button class="break-chip" type="button" data-reason="Phone">Phone</button>
+      <button class="break-chip" type="button" data-reason="Distracted">Distracted</button>
+    </div>
+    <button id="btnBreakSave" class="modal-btn" type="button">Save</button>
+  </div>
+</div>
+
 <div id="sheetModalOverlay" class="modal-overlay">
   <div class="modal-card left">
     <p class="sheet-modal-text">Send each logged session to a Google Sheet automatically. Nothing is sent unless you set a URL below — this is entirely optional and just for you.</p>
@@ -984,7 +1019,7 @@
     localStorage.setItem(BACKUP_KEY, json); // mirror every save so one bad read can't erase everything
   }
 
-  function addSession(durationSeconds, mode, activity, breakSeconds, distractions, startedAt, endedAt){
+  function addSession(durationSeconds, mode, activity, breakSeconds, distractions, startedAt, endedAt, breaks){
     if(durationSeconds <= 0) return;
     breakSeconds = breakSeconds || 0;
     distractions = distractions || 0;
@@ -1003,7 +1038,8 @@
       mode,
       activity: activity || "Untitled",
       breakSeconds,
-      distractions
+      distractions,
+      breaks: breaks || [] // one {reason, seconds} entry per pause; older sessions simply don't have this
     });
     saveAll(data);
   }
@@ -1045,6 +1081,8 @@
   let isEditing = false;
   let pauseStartedAt = null;   // ms timestamp when the current pause began, null if not paused
   let sessionBreakMs = 0;      // break time accumulated so far during the in-progress session
+  let sessionBreaks = [];      // finished breaks this session: [{reason, seconds}]
+  let currentBreakReason = ""; // reason for the pause that's in progress (set by the pause popup)
   let sessionStartedAt = null; // ISO timestamp of the first Start click for the in-progress chunk (not overwritten on resume)
   let breakTickHandle = null;  // live-updates the status pill while paused
   let pendingSession = null;   // session data awaiting a distraction count from the log-time popup
@@ -1095,6 +1133,9 @@
     modalBreakDisplay: document.getElementById("modalBreakDisplay"),
     distractionInput: document.getElementById("distractionInput"),
     btnModalLog: document.getElementById("btnModalLog"),
+    breakModalOverlay: document.getElementById("breakModalOverlay"),
+    breakReasonInput: document.getElementById("breakReasonInput"),
+    btnBreakSave: document.getElementById("btnBreakSave"),
     todayDistractionsValue: document.getElementById("todayDistractionsValue"),
     allTimeDistractionsValue: document.getElementById("allTimeDistractionsValue"),
     btnFullscreen: document.getElementById("btnFullscreen"),
@@ -1185,6 +1226,14 @@
     return s.start || new Date(new Date(s.end).getTime() - (s.durationSeconds + (s.breakSeconds || 0)) * 1000).toISOString();
   }
 
+  // "Bathroom (02:10); Phone (05:00)" — one entry per pause, blank reasons shown as "No reason".
+  // Returns "" for sessions with no recorded breaks (including all sessions logged before this existed).
+  function formatBreakReasons(breaks){
+    return (breaks || [])
+      .map(b => `${b.reason || "No reason"} (${fmtHMS(b.seconds)})`)
+      .join("; ");
+  }
+
   function sheetRow(dateKey, s){
     const startIso = sessionStartIso(s);
     return {
@@ -1196,6 +1245,7 @@
       duration: fmtHMS(s.durationSeconds),
       breakTime: fmtHMS(s.breakSeconds || 0),
       distractions: s.distractions || 0,
+      breakReasons: formatBreakReasons(s.breaks),
       startISO: startIso, // exact timestamps, kept only to build the Google Calendar feed reliably
       endISO: s.end
     };
@@ -1425,15 +1475,23 @@
     }
   }
 
+  // Ends an in-progress pause (on Resume or Stop & Log): folds its length into the session's
+  // break total and records it, with its reason, in the session's list of breaks.
+  function closeCurrentBreak(){
+    if(pauseStartedAt === null) return;
+    const ms = Date.now() - pauseStartedAt;
+    sessionBreakMs += ms;
+    sessionBreaks.push({ reason: currentBreakReason, seconds: Math.round(ms / 1000) });
+    currentBreakReason = "";
+    pauseStartedAt = null;
+    clearInterval(breakTickHandle);
+  }
+
   function startTimer(){
     if(running) return;
     if(isEditing) commitEdit();
     if(mode === "countdown" && countdownSeconds <= 0) return;
-    if(pauseStartedAt !== null){
-      sessionBreakMs += (Date.now() - pauseStartedAt);
-      pauseStartedAt = null;
-      clearInterval(breakTickHandle);
-    }
+    closeCurrentBreak();
     if(sessionStartedAt === null){
       sessionStartedAt = new Date().toISOString();
     }
@@ -1468,6 +1526,7 @@
     updatePauseStatus();
     breakTickHandle = setInterval(updatePauseStatus, 1000);
     render();
+    openBreakModal(); // the pause is already in effect; this just asks why
   }
 
   el.btnStart.addEventListener("click", () => {
@@ -1483,18 +1542,15 @@
       running = false;
       clearInterval(tickHandle);
     }
-    if(pauseStartedAt !== null){
-      sessionBreakMs += (Date.now() - pauseStartedAt);
-      pauseStartedAt = null;
-      clearInterval(breakTickHandle);
-    }
+    closeCurrentBreak();
     const seconds = accumulatedMs / 1000;
     const breakSeconds = Math.round(sessionBreakMs / 1000);
+    const breaks = sessionBreaks;
     const activity = el.activityInput.value.trim();
     const startedAt = sessionStartedAt;
     const endedAt = new Date().toISOString();
     resetInternalOnly();
-    openDistractionModal({ seconds, mode, activity, breakSeconds, startedAt, endedAt, isCountdownFinish: false });
+    openDistractionModal({ seconds, mode, activity, breakSeconds, breaks, startedAt, endedAt, isCountdownFinish: false });
   }
   el.btnStop.addEventListener("click", stopAndLog);
 
@@ -1506,14 +1562,44 @@
     accumulatedMs = countdownSeconds * 1000;
     const seconds = accumulatedMs / 1000;
     const breakSeconds = Math.round(sessionBreakMs / 1000);
+    const breaks = sessionBreaks;
     const activity = el.activityInput.value.trim();
     const startedAt = sessionStartedAt;
     const endedAt = new Date().toISOString();
     beep();
     document.title = "✅ Chunk done! — Deep Work Timer";
     resetInternalOnly();
-    openDistractionModal({ seconds, mode, activity, breakSeconds, startedAt, endedAt, isCountdownFinish: true });
+    openDistractionModal({ seconds, mode, activity, breakSeconds, breaks, startedAt, endedAt, isCountdownFinish: true });
   }
+
+  // ---------- pause popup: record why you're taking a break ----------
+  // The pause itself has already happened by the time this opens, so leaving it blank, pressing
+  // Escape, or clicking away all just keep the pause going with no reason recorded.
+  function openBreakModal(){
+    el.breakReasonInput.value = "";
+    el.breakModalOverlay.classList.add("visible");
+    el.breakReasonInput.focus();
+  }
+
+  function commitBreakReason(reason){
+    if(!el.breakModalOverlay.classList.contains("visible")) return;
+    currentBreakReason = (reason !== undefined ? reason : el.breakReasonInput.value).trim();
+    el.breakModalOverlay.classList.remove("visible");
+  }
+
+  el.btnBreakSave.addEventListener("click", () => commitBreakReason());
+  el.breakReasonInput.addEventListener("keydown", (e) => {
+    if(e.key === "Enter"){ e.preventDefault(); commitBreakReason(); }
+  });
+  el.breakModalOverlay.addEventListener("click", (e) => {
+    if(e.target === el.breakModalOverlay) commitBreakReason();
+  });
+  document.querySelectorAll(".break-chip").forEach(chip => {
+    chip.addEventListener("click", () => commitBreakReason(chip.dataset.reason));
+  });
+  document.addEventListener("keydown", (e) => {
+    if(e.key === "Escape" && el.breakModalOverlay.classList.contains("visible")) commitBreakReason();
+  });
 
   // ---------- post-log distraction-count popup ----------
   function openDistractionModal(sessionData){
@@ -1632,12 +1718,13 @@
     commitModalEndEdit();
     const raw = parseInt(el.distractionInput.value, 10);
     const distractions = (isNaN(raw) || raw < 0) ? 0 : raw;
-    addSession(pendingSession.seconds, pendingSession.mode, pendingSession.activity, pendingSession.breakSeconds, distractions, pendingSession.startedAt, pendingSession.endedAt);
+    addSession(pendingSession.seconds, pendingSession.mode, pendingSession.activity, pendingSession.breakSeconds, distractions, pendingSession.startedAt, pendingSession.endedAt, pendingSession.breaks);
     sendToSheet(sheetRow(todayKey(), {
       activity: pendingSession.activity,
       mode: pendingSession.mode,
       durationSeconds: pendingSession.seconds,
       breakSeconds: pendingSession.breakSeconds,
+      breaks: pendingSession.breaks,
       distractions,
       start: pendingSession.startedAt,
       end: pendingSession.endedAt
@@ -1663,6 +1750,8 @@
     accumulatedMs = 0;
     startTimestamp = null;
     sessionBreakMs = 0;
+    sessionBreaks = [];
+    currentBreakReason = "";
     sessionStartedAt = null;
     pauseStartedAt = null;
     clearInterval(breakTickHandle);
@@ -1680,6 +1769,8 @@
     accumulatedMs = 0;
     startTimestamp = null;
     sessionBreakMs = 0;
+    sessionBreaks = [];
+    currentBreakReason = "";
     sessionStartedAt = null;
     pauseStartedAt = null;
     clearInterval(breakTickHandle);
@@ -1775,7 +1866,7 @@
                 <td>${fmtClock(sessionStartIso(s))}</td>
                 <td>${fmtClock(s.end)}</td>
                 <td class="num mono">${fmtHMS(s.durationSeconds)}</td>
-                <td class="num mono break-cell">${(s.breakSeconds || 0) > 0 ? fmtHMS(s.breakSeconds) : "—"}</td>
+                <td class="num mono break-cell" title="${escapeHtml(formatBreakReasons(s.breaks))}">${(s.breakSeconds || 0) > 0 ? fmtHMS(s.breakSeconds) : "—"}</td>
                 <td class="num mono distraction-cell">${(s.distractions || 0) > 0 ? s.distractions : "—"}</td>
               </tr>`;
             }).join("");
@@ -1838,7 +1929,7 @@
                   <td>${fmtClock(sessionStartIso(s))}</td>
                   <td>${fmtClock(s.end)}</td>
                   <td class="num mono">${fmtHMS(s.durationSeconds)}</td>
-                  <td class="num mono break-cell">${(s.breakSeconds || 0) > 0 ? fmtHMS(s.breakSeconds) : "—"}</td>
+                  <td class="num mono break-cell" title="${escapeHtml(formatBreakReasons(s.breaks))}">${(s.breakSeconds || 0) > 0 ? fmtHMS(s.breakSeconds) : "—"}</td>
                   <td class="num mono distraction-cell">${(s.distractions || 0) > 0 ? s.distractions : "—"}</td>
                 </tr>`;
               }).join("");
@@ -2010,7 +2101,7 @@
           <td>${fmtClock(sessionStartIso(s))}</td>
           <td>${fmtClock(s.end)}</td>
           <td class="num mono">${fmtHMS(s.durationSeconds)}</td>
-          <td class="num mono break-cell">${(s.breakSeconds || 0) > 0 ? fmtHMS(s.breakSeconds) : "—"}</td>
+          <td class="num mono break-cell" title="${escapeHtml(formatBreakReasons(s.breaks))}">${(s.breakSeconds || 0) > 0 ? fmtHMS(s.breakSeconds) : "—"}</td>
           <td class="num mono distraction-cell">${(s.distractions || 0) > 0 ? s.distractions : "—"}</td>
         </tr>`;
       }).join("");
