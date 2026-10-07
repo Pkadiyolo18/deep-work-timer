@@ -629,6 +629,97 @@
   .stats-view{ display:none; }
   .stats-view.active{ display:block; }
 
+  /* While the Days tab is open, the page drops its narrow column: full width, no timer card, bigger panels */
+  body.days-fullpage{ padding:20px; }
+  body.days-fullpage .page{ max-width:none; }
+  body.days-fullpage .timer-pane{ display:none; }
+  body.days-fullpage .days-grid{ grid-template-columns:repeat(auto-fill, minmax(360px, 1fr)); gap:18px; }
+
+  /* Days tab: one square panel per day, 6 AM – 10 PM */
+  .days-grid{
+    display:grid;
+    grid-template-columns:repeat(auto-fill, minmax(290px, 1fr));
+    gap:14px;
+  }
+  .day-panel{
+    aspect-ratio:1 / 1;
+    min-width:0;
+    display:flex;
+    flex-direction:column;
+    padding:10px 12px 10px;
+    border:1px solid var(--border-strong);
+    border-radius:12px;
+    background:var(--chip-bg);
+  }
+  .day-panel-head{
+    display:flex;
+    justify-content:space-between;
+    align-items:baseline;
+    gap:8px;
+    margin-bottom:6px;
+  }
+  .day-panel-title{ font-size:13px; font-weight:700; color:var(--text); }
+  .day-panel-today{ font-weight:500; color:var(--muted); }
+  .day-panel-total{
+    font-family:"Manrope",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+    font-size:12px;
+    font-weight:700;
+    color:var(--muted);
+  }
+  .day-timeline-wrap{ position:relative; flex:1; min-height:0; }
+  .day-timeline{ position:absolute; top:6px; bottom:6px; left:30px; right:0; }
+  .day-hour-line{ position:absolute; left:0; right:0; border-top:1px solid var(--border-strong); }
+  .day-hour-label{
+    position:absolute;
+    left:-30px;
+    width:24px;
+    transform:translateY(-50%);
+    text-align:right;
+    font-size:9.5px;
+    color:var(--muted);
+    line-height:1;
+  }
+  .day-bar{ position:absolute; border-radius:3px; min-height:3px; }
+  .day-break{
+    position:absolute;
+    min-height:2px;
+    background:
+      repeating-linear-gradient(135deg, var(--muted) 0 1.5px, transparent 1.5px 4px),
+      var(--chip-bg);
+    box-shadow:inset 0 0 0 1px var(--border-strong);
+  }
+  .day-label{
+    position:absolute;
+    left:20px;
+    right:0;
+    display:flex;
+    align-items:center;
+    gap:6px;
+    font-size:10.5px;
+    line-height:1.1;
+    white-space:nowrap;
+    overflow:hidden;
+    transform:translateY(-1px);
+  }
+  .day-label-name{ font-weight:700; color:var(--text); overflow:hidden; text-overflow:ellipsis; }
+  .day-label-time{ color:var(--muted); flex-shrink:0; }
+  .day-panel-note{ margin-top:4px; font-size:10px; color:var(--muted); }
+  .days-empty{ grid-column:1 / -1; color:var(--muted); font-size:13px; text-align:center; padding:20px 0; }
+  .days-more{
+    display:block;
+    margin:16px auto 0;
+    padding:7px 14px;
+    border:1px solid var(--border-strong);
+    border-radius:8px;
+    background:var(--chip-bg);
+    color:var(--text);
+    font-size:13px;
+    font-weight:600;
+    font-family:inherit;
+    cursor:pointer;
+  }
+  .days-more:hover{ background:var(--chip-bg-hover); }
+
   .chart-block{ margin-bottom:36px; }
   .chart-block:last-child{ margin-bottom:0; }
 
@@ -781,7 +872,7 @@
   <button id="btnSheetWarningFix" type="button">Reconnect</button>
   <button id="btnSheetWarningDismiss" type="button" class="sheet-warning-dismiss" aria-label="Dismiss">✕</button>
 </div>
-<div class="pane">
+<div class="pane timer-pane">
   <button id="btnFullscreen" class="fullscreen-btn" type="button" title="Enter fullscreen">⛶</button>
   <button id="btnSheetSettings" class="fullscreen-btn sheet-sync-btn" type="button" title="Google Sheet sync">📤</button>
   <div class="tabbar">
@@ -827,6 +918,7 @@
   <div id="statsPanel" class="stats-panel">
     <div class="stats-tabbar">
       <button id="statsTabTotals" class="tab active">Totals</button>
+      <button id="statsTabDays" class="tab">Days</button>
       <button id="statsTabCharts" class="tab">Charts</button>
     </div>
 
@@ -880,6 +972,11 @@
         <span>ALL-TIME DISTRACTIONS</span>
         <span id="allTimeDistractionsValue" class="caption-value">0</span>
       </div>
+    </div>
+
+    <div id="statsDaysView" class="stats-view">
+      <div id="daysGrid" class="days-grid"></div>
+      <button id="btnDaysMore" class="ghost-btn days-more" type="button">Show older days</button>
     </div>
 
     <div id="statsChartsView" class="stats-view">
@@ -1143,6 +1240,10 @@
     statsTabCharts: document.getElementById("statsTabCharts"),
     statsTotalsView: document.getElementById("statsTotalsView"),
     statsChartsView: document.getElementById("statsChartsView"),
+    statsTabDays: document.getElementById("statsTabDays"),
+    statsDaysView: document.getElementById("statsDaysView"),
+    daysGrid: document.getElementById("daysGrid"),
+    btnDaysMore: document.getElementById("btnDaysMore"),
     weekChart: document.getElementById("weekChart"),
     weekChartBars: document.getElementById("weekChartBars"),
     heatmapGrid: document.getElementById("heatmapGrid"),
@@ -1161,18 +1262,27 @@
     btnSheetWarningDismiss: document.getElementById("btnSheetWarningDismiss"),
   };
 
-  el.statsTabTotals.addEventListener("click", () => {
-    el.statsTabTotals.classList.add("active");
-    el.statsTabCharts.classList.remove("active");
-    el.statsTotalsView.classList.add("active");
-    el.statsChartsView.classList.remove("active");
+  const statsTabs = [
+    [el.statsTabTotals, el.statsTotalsView],
+    [el.statsTabDays, el.statsDaysView],
+    [el.statsTabCharts, el.statsChartsView],
+  ];
+  statsTabs.forEach(([tab]) => {
+    tab.addEventListener("click", () => {
+      statsTabs.forEach(([t, view]) => {
+        t.classList.toggle("active", t === tab);
+        view.classList.toggle("active", t === tab);
+      });
+      syncFullpageMode();
+    });
   });
-  el.statsTabCharts.addEventListener("click", () => {
-    el.statsTabCharts.classList.add("active");
-    el.statsTabTotals.classList.remove("active");
-    el.statsChartsView.classList.add("active");
-    el.statsTotalsView.classList.remove("active");
-  });
+
+  // The Days tab takes over the whole page, but only while it's actually showing —
+  // collapsing the Totals section brings the normal layout (and the timer) back.
+  function syncFullpageMode(){
+    document.body.classList.toggle("days-fullpage",
+      statsVisible() && el.statsTabDays.classList.contains("active"));
+  }
 
   // remember the last-typed activity between visits
   el.activityInput.value = localStorage.getItem(ACTIVITY_KEY) || "";
@@ -1479,9 +1589,15 @@
   // break total and records it, with its reason, in the session's list of breaks.
   function closeCurrentBreak(){
     if(pauseStartedAt === null) return;
-    const ms = Date.now() - pauseStartedAt;
+    const now = Date.now();
+    const ms = now - pauseStartedAt;
     sessionBreakMs += ms;
-    sessionBreaks.push({ reason: currentBreakReason, seconds: Math.round(ms / 1000) });
+    sessionBreaks.push({
+      reason: currentBreakReason,
+      seconds: Math.round(ms / 1000),
+      start: new Date(pauseStartedAt).toISOString(), // when the pause began and ended, so the Days tab can draw it
+      end: new Date(now).toISOString()
+    });
     currentBreakReason = "";
     pauseStartedAt = null;
     clearInterval(breakTickHandle);
@@ -1810,6 +1926,7 @@
     localStorage.setItem(PREF_KEY, v ? "1" : "0");
     el.statsPanel.classList.toggle("visible", v);
     el.statsToggle.classList.toggle("expanded", v);
+    syncFullpageMode();
   }
   el.statsToggle.addEventListener("click", () => setStatsVisible(!statsVisible()));
 
@@ -1949,7 +2066,147 @@
 
     renderWeekChart(data);
     renderHeatmap(data);
+    renderDays(data);
   }
+
+  // ---------- days tab: a square 6 AM – 10 PM timeline panel per day ----------
+  const DAY_START_MIN = 6 * 60;
+  const DAY_END_MIN = 22 * 60;
+  const DAY_SPAN_MIN = DAY_END_MIN - DAY_START_MIN;
+  const DAY_LABEL_GAP_PCT = 5.2; // minimum vertical spacing between labels, as a % of the panel's timeline height
+  const DAYS_PAGE = 14;
+  let daysShown = DAYS_PAGE;
+
+  // Same activity name always gets the same color (case-insensitive).
+  function activityColor(name){
+    const key = name.toLowerCase();
+    let h = 0;
+    for(let i = 0; i < key.length; i++) h = (h * 31 + key.charCodeAt(i)) % 360;
+    return `hsl(${h} 55% 48%)`;
+  }
+
+  // "2:15–3:00 PM", or "11:30 AM–12:15 PM" when it crosses noon
+  function fmtRange(startIso, endIso){
+    const a = fmtClock(startIso), b = fmtClock(endIso);
+    const aSuffix = a.split(" ")[1], bSuffix = b.split(" ")[1];
+    return aSuffix === bSuffix ? `${a.replace(" " + aSuffix, "")}–${b}` : `${a}–${b}`;
+  }
+
+  function dayPct(minutes){
+    const clamped = Math.min(DAY_END_MIN, Math.max(DAY_START_MIN, minutes));
+    return (clamped - DAY_START_MIN) / DAY_SPAN_MIN * 100;
+  }
+
+  function buildDayPanel(key, rec){
+    const [y, m, d] = key.split("-").map(Number);
+    const dayStart = new Date(y, m - 1, d); // local midnight of this day
+    const minutesIntoDay = iso => (new Date(iso) - dayStart) / 60000;
+
+    const items = (rec.sessions || []).map(s => ({
+      s,
+      startIso: sessionStartIso(s),
+      startMin: minutesIntoDay(sessionStartIso(s)),
+      endMin: minutesIntoDay(s.end),
+      name: (s.activity || "Untitled").trim() || "Untitled"
+    })).sort((a, b) => a.startMin - b.startMin);
+
+    const visible = items.filter(it => it.endMin > DAY_START_MIN && it.startMin < DAY_END_MIN);
+    const outside = items.length - visible.length;
+    const cutOff = visible.filter(it => it.startMin < DAY_START_MIN || it.endMin > DAY_END_MIN).length;
+
+    // Overlapping sessions (possible if times were edited) share the narrow bar column side by side.
+    const laneEnds = [];
+    visible.forEach(it => {
+      let lane = laneEnds.findIndex(end => end <= it.startMin);
+      if(lane === -1){ lane = laneEnds.length; laneEnds.push(0); }
+      laneEnds[lane] = it.endMin;
+      it.lane = lane;
+    });
+    const laneWidth = 14 / Math.max(1, laneEnds.length);
+
+    // Labels sit at their session's start time, nudged down just enough that none overlap.
+    let lastTop = -Infinity;
+    visible.forEach(it => {
+      it.labelTop = Math.max(dayPct(it.startMin), lastTop + DAY_LABEL_GAP_PCT);
+      lastTop = it.labelTop;
+    });
+    let ceiling = 100 - DAY_LABEL_GAP_PCT * 0.6;
+    for(let i = visible.length - 1; i >= 0; i--){
+      if(visible[i].labelTop > ceiling) visible[i].labelTop = ceiling;
+      ceiling = visible[i].labelTop - DAY_LABEL_GAP_PCT;
+    }
+
+    let timeline = "";
+    for(let h = 6; h <= 22; h++){
+      const top = (h - 6) / 16 * 100;
+      timeline += `<div class="day-hour-line" style="top:${top}%"></div>`;
+      if(h % 2 === 0){
+        const text = h === 12 ? "12p" : (h < 12 ? `${h}a` : `${h - 12}p`);
+        timeline += `<div class="day-hour-label" style="top:${top}%">${text}</div>`;
+      }
+    }
+    visible.forEach(it => {
+      const s = it.s;
+      const tip = escapeHtml(
+        `${it.name} · ${fmtClock(it.startIso)}–${fmtClock(s.end)} · focus ${fmtHMS(s.durationSeconds)}` +
+        ((s.breakSeconds || 0) > 0 ? ` · break ${fmtHMS(s.breakSeconds)}` : "")
+      );
+      const top = dayPct(it.startMin);
+      const height = dayPct(it.endMin) - top;
+      timeline += `<div class="day-bar" title="${tip}" style="top:${top}%;height:${height}%;left:${it.lane * laneWidth}px;width:${laneWidth - 1}px;background:${activityColor(it.name)}"></div>`;
+
+      // Pauses are drawn as hatched gaps inside the session's bar (clipped to the bar and the 6 AM–10 PM window).
+      (s.breaks || []).forEach(b => {
+        if(!b.start || !b.end) return; // sessions logged before pauses were timestamped have nothing to draw
+        const from = Math.max(minutesIntoDay(b.start), it.startMin, DAY_START_MIN);
+        const to = Math.min(minutesIntoDay(b.end), it.endMin, DAY_END_MIN);
+        if(to <= from) return;
+        const bTop = dayPct(from);
+        const bTip = escapeHtml(`☕ ${b.reason || "No reason"} · ${fmtRange(b.start, b.end)} (${fmtHMS(b.seconds)}) — during ${it.name}`);
+        timeline += `<div class="day-break" title="${bTip}" style="top:${bTop}%;height:${dayPct(to) - bTop}%;left:${it.lane * laneWidth}px;width:${laneWidth - 1}px"></div>`;
+      });
+      timeline += `<div class="day-label" title="${tip}" style="top:${it.labelTop}%">
+        <span class="day-label-name">${escapeHtml(it.name)}</span>
+        <span class="day-label-time">${fmtRange(it.startIso, s.end)}</span>
+      </div>`;
+    });
+
+    const notes = [];
+    if(outside > 0) notes.push(`${outside} session${outside === 1 ? "" : "s"} outside 6 AM–10 PM`);
+    if(cutOff > 0) notes.push(`${cutOff} cut off at the edge`);
+
+    const dateLabel = new Date(y, m - 1, d).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
+    const panel = document.createElement("div");
+    panel.className = "day-panel";
+    panel.innerHTML = `
+      <div class="day-panel-head">
+        <span class="day-panel-title">${dateLabel}${key === todayKey() ? ' <span class="day-panel-today">· Today</span>' : ""}</span>
+        <span class="day-panel-total" title="Total focus time">${fmtHMS(rec.totalSeconds || 0)}</span>
+      </div>
+      <div class="day-timeline-wrap"><div class="day-timeline">${timeline}</div></div>
+      ${notes.length ? `<div class="day-panel-note">${notes.join(" · ")}</div>` : ""}
+    `;
+    return panel;
+  }
+
+  function renderDays(data){
+    const keys = Object.keys(data)
+      .filter(k => (data[k].sessions || []).length > 0)
+      .sort((a, b) => b.localeCompare(a)); // newest day first
+    el.daysGrid.innerHTML = "";
+    if(keys.length === 0){
+      el.daysGrid.innerHTML = `<div class="days-empty">No sessions logged yet.</div>`;
+      el.btnDaysMore.style.display = "none";
+      return;
+    }
+    keys.slice(0, daysShown).forEach(k => el.daysGrid.appendChild(buildDayPanel(k, data[k])));
+    el.btnDaysMore.style.display = keys.length > daysShown ? "block" : "none";
+  }
+
+  el.btnDaysMore.addEventListener("click", () => {
+    daysShown += DAYS_PAGE;
+    renderDays(loadAll());
+  });
 
   // ---------- charts ----------
   const WEEK_GOAL_SECONDS = 8 * 3600;  // the daily focus-time goal this chart is scaled against
